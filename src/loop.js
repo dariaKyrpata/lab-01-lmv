@@ -1,50 +1,50 @@
 export function createLoop({ step = 1 / 60, simulate, render }) {
-    let lastTime = performance.now();
-    let accumulator = 0;
-    let frameId;
+  let lastTime = performance.now();
+  let accumulator = 0;
+  let frameId;
 
-    let framesThisSecond = 0;
-    let stepsThisSecond = 0;
-    let lastStatTime = lastTime;
-    
-    let stats = { fps: 0, stepsPerSecond: 0, frameTime: 0 };
+  let framesThisSecond = 0;
+  let stepsThisSecond = 0;
+  let lastStatTime = lastTime;
 
-    function frame(currentTime) {
-        let deltaTime = (currentTime - lastTime) / 1000;
-        if (deltaTime > 0.25) deltaTime = 0.25;
+  let stats = { fps: 0, stepsPerSecond: 0, frameTime: 0 };
 
-        stats.frameTime = currentTime - lastTime;
+  function frame(currentTime) {
+    let deltaTime = (currentTime - lastTime) / 1000;
+    if (deltaTime > 0.25) deltaTime = 0.25;
 
-        accumulator += deltaTime;
-        lastTime = currentTime;
+    stats.frameTime = currentTime - lastTime;
 
-        while (accumulator >= step) {
-            simulate(step);
-            stepsThisSecond++;
-            accumulator -= step;
-        }
+    accumulator += deltaTime;
+    lastTime = currentTime;
 
-        render(accumulator / step);
-        framesThisSecond++;
-
-        if (currentTime - lastStatTime >= 1000) {
-            stats.fps = framesThisSecond;
-            stats.stepsPerSecond = stepsThisSecond;
-            framesThisSecond = 0;
-            stepsThisSecond = 0;
-            lastStatTime = currentTime;
-        }
-
-        frameId = requestAnimationFrame(frame);
+    while (accumulator >= step) {
+      simulate(step);
+      stepsThisSecond++;
+      accumulator -= step;
     }
 
-    return {
-        start: () => {
-            lastTime = performance.now();
-            lastStatTime = lastTime;
-            frameId = requestAnimationFrame(frame);
-        },
-        stop: () => cancelAnimationFrame(frameId),
-        getStats: () => stats
-    };
+    render(accumulator / step);
+    framesThisSecond++;
+
+    if (currentTime - lastStatTime >= 1000) {
+      stats.fps = framesThisSecond;
+      stats.stepsPerSecond = stepsThisSecond;
+      framesThisSecond = 0;
+      stepsThisSecond = 0;
+      lastStatTime = currentTime;
+    }
+
+    frameId = requestAnimationFrame(frame);
+  }
+
+  return {
+    start: () => {
+      lastTime = performance.now();
+      lastStatTime = lastTime;
+      frameId = requestAnimationFrame(frame);
+    },
+    stop: () => cancelAnimationFrame(frameId),
+    getStats: () => stats,
+  };
 }

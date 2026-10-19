@@ -1,33 +1,52 @@
 export function createInput(target) {
-    // Створюємо дві закриті "коробочки" (множини) для кнопок
-    const down = new Set();
-    const pressed = new Set();
+  const down = new Set();
+  const pressed = new Set();
 
-    // Коли кнопка натискається вниз
-    target.addEventListener("keydown", (e) => {
-        if (!down.has(e.code)) {
-            pressed.add(e.code); // Фіксуємо одиночне натискання
-        }
-        down.add(e.code); // Фіксуємо, що кнопка затиснута
-    });
+  const gameKeys = new Set([
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+    "Space",
+  ]);
 
-    // Коли кнопку відпускають
-    target.addEventListener("keyup", (e) => {
-        down.delete(e.code);
-    });
+  target.addEventListener("keydown", (event) => {
+    if (gameKeys.has(event.code)) {
+      event.preventDefault();
+    }
 
-    // Повертаємо пульт керування з двома кнопками
-    return {
-        // Перевіряє, чи кнопка зараз затиснута (для газу)
-        isDown: (code) => down.has(code),
-        
-        // Перевіряє, чи кнопку щойно натиснули один раз (наприклад, для пострілу)
-        justPressed: (code) => {
-            if (pressed.has(code)) {
-                pressed.delete(code);
-                return true;
-            }
-            return false;
-        }
-    };
+    if (!down.has(event.code)) {
+      pressed.add(event.code);
+    }
+
+    down.add(event.code);
+  });
+
+  target.addEventListener("keyup", (event) => {
+    down.delete(event.code);
+  });
+
+  target.addEventListener("blur", () => {
+    down.clear();
+    pressed.clear();
+  });
+
+  return {
+    isDown(code) {
+      return down.has(code);
+    },
+
+    justPressed(code) {
+      if (!pressed.has(code)) {
+        return false;
+      }
+
+      pressed.delete(code);
+      return true;
+    },
+
+    clearPressed() {
+      pressed.clear();
+    },
+  };
 }
