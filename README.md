@@ -569,3 +569,31 @@ Lab 03 extended Space Dogfight with asynchronous asset loading, a Canvas loading
 The experiments demonstrated how Promises, async/await, timers, requestAnimationFrame, and AbortController work.
 
 The project also demonstrates error handling and the performance benefits of loading independent resources concurrently.
+
+## 9. Additional Tests
+
+### Automatic Retry After HTTP 503
+
+A temporary server error was simulated to test automatic retries.
+
+The loader uses exponential backoff with random jitter between attempts.
+
+Console output confirmed that the request was retried and eventually completed successfully.
+
+The test also showed that replacing the global fetch function can affect other requests running at the same time.
+
+### Cancellation During Loading
+
+An asynchronous request was simulated with a two-second delay.
+
+AbortController cancelled the request after 200 milliseconds.
+
+Observed console output:
+
+```text
+Abort test: request started
+Abort test: cancelling request
+Abort test: cancelled during loading
+```
+
+The test confirmed that an active request can be cancelled before it finishes.
