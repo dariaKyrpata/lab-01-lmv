@@ -5,12 +5,12 @@ export class Pickup extends Entity {
   constructor({
     pos = new Vector2(),
     type = "shield",
-    duration = 5,
-    ttl = 15,
+    duration = 5, //тривалість 
+    ttl = 15, //час існування на полі
   } = {}) {
     super({
       pos,
-      vel: new Vector2(),
+      vel: new Vector2(), ///він нерухомий
       radius: 12,
       kind: "pickup",
     });
@@ -18,7 +18,7 @@ export class Pickup extends Entity {
     this.type = type;
     this.duration = duration;
     this.ttl = ttl;
-    this.pulse = 0;
+    this.pulse = 0; //анімація
   }
 
   update(dt) {
@@ -32,7 +32,7 @@ export class Pickup extends Entity {
     }
   }
 
-  applyTo(ship) {
+  applyTo(ship) { //застосування бонусу до корабля
     if (!this.alive || !ship.alive) {
       return false;
     }
@@ -43,7 +43,7 @@ export class Pickup extends Entity {
       return false;
     }
 
-    this.destroy();
+    this.destroy(); //прибираємо бонус після застосування
 
     return true;
   }

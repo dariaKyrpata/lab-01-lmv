@@ -16,20 +16,20 @@ export class Asteroid extends Entity {
       kind: "asteroid",
     });
 
-    this.hp = hp;
-    this.maxHp = hp;
+    this.hp = hp; //поточне хп
+    this.maxHp = hp; //максимальне хп
     this.homing = homing;
-    this.rotationSpeed = (Math.random() - 0.5) * 2;
-    this.shape = this.createShape();
+    this.rotationSpeed = (Math.random() - 0.5) * 2; //випадкова швидкість обертання
+    this.shape = this.createShape(); // форма астероїда
   }
 
-  createShape() {
+  createShape() { //створює випадкову форму астероїда
     const points = [];
-    const count = 9;
+    const count = 9; //кількість точок, що формують форму
 
     for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      const distance = 0.75 + Math.random() * 0.25;
+      const angle = (i / count) * Math.PI * 2; //кут для кожної точки
+      const distance = 0.75 + Math.random() * 0.25; //випадкова відстань від центру до точки, щоб створити нерівну форму
 
       points.push({
         angle,
@@ -49,40 +49,40 @@ export class Asteroid extends Entity {
 
     super.update(dt);
 
-    this.angle += this.rotationSpeed * dt;
+    this.angle += this.rotationSpeed * dt; //обертання астероїда
 
-    if (world) {
+    if (world) { //розміри світу
       const width = world.width;
       const height = world.height;
 
-      if (this.pos.x - this.radius < 0) {
+      if (this.pos.x - this.radius < 0) { //відбиття від лівого краю
         this.pos.x = this.radius;
         this.vel.x = Math.abs(this.vel.x);
       }
 
-      if (this.pos.x + this.radius > width) {
+      if (this.pos.x + this.radius > width) { //відбиття від правого краю
         this.pos.x = width - this.radius;
         this.vel.x = -Math.abs(this.vel.x);
       }
 
-      if (this.pos.y - this.radius < 0) {
+      if (this.pos.y - this.radius < 0) {//відбиття від верхнього краю
         this.pos.y = this.radius;
         this.vel.y = Math.abs(this.vel.y);
       }
 
-      if (this.pos.y + this.radius > height) {
+      if (this.pos.y + this.radius > height) {//відбиття від нижнього краю
         this.pos.y = height - this.radius;
         this.vel.y = -Math.abs(this.vel.y);
       }
     }
   }
 
-  takeDamage(amount) {
+  takeDamage(amount) { //отримання шкоди астероїдом
     if (!this.alive) return false;
 
-    this.hp = Math.max(0, this.hp - amount);
+    this.hp = Math.max(0, this.hp - amount); //зменшує поточне хп, не дозволяючи йому бути менше 0
 
-    if (this.hp === 0) {
+    if (this.hp === 0) { //якщо хп досягло 0, знищуємо астероїд
       this.destroy();
       return true;
     }

@@ -6,8 +6,8 @@ export class Bullet extends Entity {
     vel,
     ownerId = null,
     damage = 25,
-    ttl = 2,
-    homing = null,
+    ttl = 2, //час існування кулі
+    homing = null, //самонаведення
   }) {
     super({
       pos,
@@ -23,21 +23,21 @@ export class Bullet extends Entity {
   }
 
   update(dt, world) {
-    if (!this.alive) return;
+    if (!this.alive) return; //якщо знищена, не оновлювати
 
     if (this.homing) {
-      this.homing.update(this, world, dt);
+      this.homing.update(this, world, dt); //коригуємо рух кулі, якщо є самонаведення
     }
 
     super.update(dt);
 
-    if (this.vel.length() > 0) {
-      this.angle = Math.atan2(this.vel.y, this.vel.x);
+    if (this.vel.length() > 0) { 
+      this.angle = Math.atan2(this.vel.y, this.vel.x); //обчислюємо кут напрямку кулі на основі її швидкості
     }
 
-    this.ttl -= dt;
+    this.ttl -= dt; //зменшуємо час існування кулі
 
-    if (this.ttl <= 0) {
+    if (this.ttl <= 0) { //якщо час існування кулі закінчився, знищуємо її
       this.destroy();
     }
   }

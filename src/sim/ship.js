@@ -10,7 +10,7 @@ const MAX_HP = 100;
 export class Ship extends Entity {
   #hp = MAX_HP;
 
-  constructor(x, y) {
+  constructor(x, y) { // створення корабля
     super({
       pos: new Vector2(x, y),
       vel: new Vector2(),
@@ -19,12 +19,12 @@ export class Ship extends Entity {
       kind: "ship",
     });
 
-    this.thrust = false;
-    this.input = null;
-    this.fireCooldown = 0;
-    this.score = 0;
-    this.shieldTime = 0;
-    this.invulnerableTime = 0;
+    this.thrust = false; //двигун вимкнений
+    this.input = null; //керування
+    this.fireCooldown = 0; //затримка між пострілами
+    this.score = 0; //лічильник очок
+    this.shieldTime = 0;//час дії щита
+    this.invulnerableTime = 0;//тимчасова невразливість
     this.world = null;
   }
 
@@ -38,28 +38,28 @@ export class Ship extends Entity {
     const input = this.input;
 
     if (input) {
-      if (input.isDown("ArrowLeft")) {
+      if (input.isDown("ArrowLeft")) { //поворот вліво
         this.angle -= ROTATION_SPEED * dt;
       }
 
-      if (input.isDown("ArrowRight")) {
+      if (input.isDown("ArrowRight")) { //поворот вправо
         this.angle += ROTATION_SPEED * dt;
       }
 
-      this.thrust = input.isDown("ArrowUp");
+      this.thrust = input.isDown("ArrowUp"); //рух вперед
 
-      if (this.thrust) {
+      if (this.thrust) { //прискорення
         const acceleration = Vector2.fromAngle(this.angle).scale(
           THRUST_POWER * dt,
         );
 
-        this.vel = this.vel.add(acceleration);
+        this.vel = this.vel.add(acceleration); //збільшення швидкості
       }
     }
 
-    this.vel = this.vel.scale(Math.pow(DRAG, dt * 60));
+    this.vel = this.vel.scale(Math.pow(DRAG, dt * 60)); //зменшення швидкості через опір
 
-    if (this.vel.length() > MAX_SPEED) {
+    if (this.vel.length() > MAX_SPEED) { //обмеження максимальної швидкості
       this.vel = this.vel.normalize().scale(MAX_SPEED);
     }
 
@@ -73,20 +73,20 @@ export class Ship extends Entity {
   }
 
   fire() {
-    if (!this.alive || this.fireCooldown > 0 || !this.world) {
+    if (!this.alive || this.fireCooldown > 0 || !this.world) { //перевіряє, чи можна стріляти
       return null;
     }
 
-    const direction = Vector2.fromAngle(this.angle);
+    const direction = Vector2.fromAngle(this.angle); //напрямок кулі
 
-    const bulletPosition = this.pos.add(direction.scale(this.radius + 8));
+    const bulletPosition = this.pos.add(direction.scale(this.radius + 8)); //позиція кулі
 
-    const bulletVelocity = this.vel.add(direction.scale(500));
+    const bulletVelocity = this.vel.add(direction.scale(500)); //швидкість кулі
 
-    const bullet = this.world.createBullet({
+    const bullet = this.world.createBullet({ //створення кулі
       pos: bulletPosition,
       vel: bulletVelocity,
-      ownerId: this.id,
+      ownerId: this.id, //ід літака
     });
 
     this.fireCooldown = 0.2;
@@ -95,30 +95,30 @@ export class Ship extends Entity {
   }
 
   takeDamage(amount) {
-    if (!this.alive || this.invulnerableTime > 0 || this.shieldTime > 0) {
+    if (!this.alive || this.invulnerableTime > 0 || this.shieldTime > 0) { //захищений або знищений не отримує шкоди  
       return false;
     }
 
-    this.#hp = Math.max(0, this.#hp - amount);
+    this.#hp = Math.max(0, this.#hp - amount); //зменшує здоров'я
 
-    this.invulnerableTime = 0.5;
+    this.invulnerableTime = 0.5; //тимчасова невразливість після отримання шкоди
 
-    if (this.#hp === 0) {
+    if (this.#hp === 0) { // корабель знищений
       this.destroy();
     }
 
     return true;
   }
 
-  heal(amount) {
+  heal(amount) { //відновлення здоров'я корабля
     this.#hp = Math.min(MAX_HP, this.#hp + amount);
   }
 
-  activateShield(duration = 5) {
+  activateShield(duration = 5) { //активація щита на певний час
     this.shieldTime = Math.max(this.shieldTime, duration);
   }
 
-  respawn(x, y) {
+  respawn(x, y) { //відродження корабля після знищення
     this.pos = new Vector2(x, y);
     this.vel = new Vector2();
     this.angle = -Math.PI / 2;
