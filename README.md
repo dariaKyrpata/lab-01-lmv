@@ -346,3 +346,226 @@ During Lab 02, the original game was extended with an entity-based architecture.
 The project demonstrates JavaScript classes, private fields, inheritance, prototypes, `this` binding, `Map`, generators, collision detection, and composition.
 
 The resulting architecture supports further development of the space shooter in future laboratories.
+
+---
+
+# Lab 03 — Asynchronous JavaScript: Promises, async/await and Loading Screen
+
+## Objective
+
+Learn asynchronous JavaScript using Promises, async/await, Promise.all, Fetch API, AbortController, and browser events.
+
+Extend the existing Space Dogfight game with asset loading, a loading screen, sound effects, and a room selection lobby.
+
+## 1. Asset Loading
+
+The project uses manifest.json to store the paths to game resources.
+
+The manifest contains:
+- Three sprites: ship, bullet, and asteroid
+- Three sound effects: shoot, hit, and explosion
+- Arena configuration stored in arena.json
+
+The loader.js module provides functions for loading images, audio files, and JSON data.
+
+Resources are loaded asynchronously using Promise.all. The game starts only after all required assets have been loaded successfully.
+
+A Canvas loading screen displays the current loading progress.
+
+## 2. Sprites and Sound Effects
+
+The spaceship, bullets, and asteroids use PNG images.
+
+Sound effects are implemented using the Web Audio API.
+
+The game uses EventTarget and CustomEvent to communicate between the simulation and the audio system.
+
+Three events are used:
+- fired — when the spaceship shoots
+- hit — when a bullet hits an asteroid
+- exploded — when an explosion occurs
+
+Audio playback is enabled after a user interaction with the page.
+
+## 3. Game Lobby
+
+Before starting the game, the player sees a lobby.
+
+The lobby allows the player to enter a name and select a room.
+
+Available rooms:
+- Pink Galaxy
+- Asteroid Field
+- Deep Space
+
+Room information is loaded asynchronously from /api/rooms.json.
+
+The room list is refreshed every five seconds while the lobby is visible.
+
+AbortController and AbortSignal.timeout are used to control network requests.
+
+The rooms are simulated using local JSON data. They do not represent actual multiplayer connections.
+
+## 4. Sequential vs Parallel Loading
+
+I compared sequential loading with async/await and parallel loading with Promise.all.
+
+The test loaded three JSON resources:
+- arena.json
+- rooms.json
+- manifest.json
+
+Measured results:
+
+| Loading method | Time |
+| --- | ---: |
+| Sequential await | 263 ms |
+| Parallel Promise.all | 35 ms |
+
+Parallel loading was approximately 7.5 times faster in this test.
+
+The results depend on browser caching and network conditions.
+
+## 5. Event Loop Experiments
+
+Five experiments were performed to observe the order of synchronous code, Promise callbacks, timers, async/await, and requestAnimationFrame.
+
+### Experiment 1 — Promise and setTimeout
+
+```javascript
+console.log("A");
+setTimeout(() => console.log("B"), 0);
+Promise.resolve().then(() => console.log("C"));
+console.log("D");
+```
+
+Observed output: A, D, C, B.
+
+Explanation: Synchronous operations run first, Promise callbacks run as microtasks, and the timer callback runs later.
+
+### Experiment 2 — setTimeout inside a Promise
+
+```javascript
+Promise.resolve().then(() => {
+  console.log("A");
+  setTimeout(() => console.log("B"), 0);
+});
+
+console.log("C");
+```
+
+Observed output: C, A, B.
+
+Explanation: The synchronous message appears first. The Promise callback executes as a microtask and schedules a timer for a later task.
+
+### Experiment 3 — async/await
+
+```javascript
+async function example() {
+  console.log("A");
+  await Promise.resolve();
+  console.log("B");
+}
+
+example();
+console.log("C");
+```
+
+Observed output: A, C, B.
+
+Explanation: The function starts synchronously. After await, its continuation is scheduled as a microtask.
+
+### Experiment 4 — requestAnimationFrame
+
+```javascript
+requestAnimationFrame(() => console.log("A"));
+Promise.resolve().then(() => console.log("B"));
+console.log("C");
+```
+
+Observed output: C, B, A.
+
+Explanation: Synchronous code runs first, followed by the Promise microtask. The animation callback runs during a subsequent browser rendering opportunity.
+
+### Experiment 5 — Microtasks inside timers
+
+```javascript
+setTimeout(() => {
+  console.log("A");
+  Promise.resolve().then(() => console.log("B"));
+}, 0);
+
+Promise.resolve().then(() => console.log("C"));
+console.log("D");
+```
+
+Observed output: D, C, A, B.
+
+Explanation: The initial synchronous message runs first, followed by the Promise microtask. The timer callback runs afterward and schedules another microtask.
+
+## 6. Error Handling Experiments
+
+### Test 1 — Missing Image (404)
+
+The spaceship image path was temporarily changed to a nonexistent file.
+
+Result: The loader reported an image loading error, and the game did not start.
+
+The correct image path was restored afterward.
+
+### Test 2 — Invalid JSON
+
+An extra comma was added to arena.json.
+
+Result: JSON.parse reported a SyntaxError. The game did not start with an invalid configuration.
+
+The original JSON file was restored afterward.
+
+### Test 3 — AbortController
+
+A test was performed using an already-aborted AbortController.
+
+Console output:
+
+Abort test: loading started
+Abort test: loading cancelled successfully
+
+Result: The image loader correctly rejected the aborted request.
+
+### Test 4 — Request Timeout
+
+The lobby timeout was temporarily changed from 3000 ms to 1 ms.
+
+Result: The room request timed out, and the lobby displayed:
+
+Cannot load rooms. Retrying...
+
+The original timeout of 3000 ms was restored afterward.
+
+## 7. Project Structure
+
+Important files added during Lab 03:
+
+- public/assets/manifest.json
+- public/assets/arena.json
+- public/assets/sprites/
+- public/assets/audio/
+- public/api/rooms.json
+- src/assets/loader.js
+- src/loadingScreen.js
+- src/audio.js
+- src/events.js
+- src/lobby.js
+- src/abortTest.js
+- src/speedTest.js
+- src/eventLoopTest.js
+
+The existing main.js, ship.js, and world.js files were also updated.
+
+## 8. Conclusion
+
+Lab 03 extended Space Dogfight with asynchronous asset loading, a Canvas loading screen, sound effects, and a room selection lobby.
+
+The experiments demonstrated how Promises, async/await, timers, requestAnimationFrame, and AbortController work.
+
+The project also demonstrates error handling and the performance benefits of loading independent resources concurrently.
