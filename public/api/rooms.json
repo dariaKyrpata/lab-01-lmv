@@ -1,0 +1,20 @@
+[
+  {
+    "id": "room-1",
+    "name": "Pink Galaxy",
+    "players": 2,
+    "maxPlayers": 4
+  },
+  {
+    "id": "room-2",
+    "name": "Asteroid Field",
+    "players": 1,
+    "maxPlayers": 4
+  },
+  {
+    "id": "room-3",
+    "name": "Deep Space",
+    "players": 0,
+    "maxPlayers": 4
+  }
+]

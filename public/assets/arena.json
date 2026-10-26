@@ -1,0 +1,6 @@
+{
+  "width": 960,
+  "height": 600,
+  "asteroidSpawnInterval": 3,
+  "pickupSpawnInterval": 15
+}

@@ -6,6 +6,7 @@ import { Pickup } from "./pickup.js";
 import { Explosion } from "./explosion.js";
 import { Homing } from "./homing.js";
 import { findCollisions } from "./collision.js";
+import { emitGameEvent } from "../events.js";
 
 export class World {
   #entities = new Map();
@@ -22,6 +23,8 @@ export class World {
     this.asteroidTimer = 0;
     this.pickupTimer = 0;
     this.homingEnabled = false;
+    this.asteroidSpawnInterval = 4;
+this.pickupSpawnInterval = 10;
   }
 
   spawn(entity) {
@@ -163,14 +166,20 @@ export class World {
     return this.spawn(pickup);
   }
 
-  createExplosion(pos, color = "#ff9f43") {
-    const explosion = new Explosion({
-      pos: new Vector2(pos.x, pos.y),
-      color,
-    });
+ 
+createExplosion(pos, color = "#ff9f43") {
+  const explosion = new Explosion({
+    pos: new Vector2(pos.x, pos.y),
+    color,
+  });
 
-    return this.spawn(explosion);
-  }
+  emitGameEvent("exploded", {
+    x: pos.x,
+    y: pos.y,
+  });
+
+  return this.spawn(explosion);
+}
 
   #handleCollision(a, b) {
     if (!a.alive || !b.alive) {
@@ -185,19 +194,24 @@ export class World {
       if (target.id === bullet.ownerId) {
         return;
       }
+  
+if (target.kind === "asteroid") {
+  const destroyed = target.takeDamage(bullet.damage);
 
-      if (target.kind === "asteroid") {
-        const destroyed = target.takeDamage(bullet.damage);
+  bullet.destroy();
 
-        bullet.destroy();
+  emitGameEvent("hit", {
+    targetId: target.id,
+  });
 
-        if (destroyed) {
-          this.score += 100;
-          this.createExplosion(target.pos);
-        }
+  if (destroyed) {
+    this.score += 100;
+    this.createExplosion(target.pos);
+  }
 
-        return;
-      }
+  return;
+}
+
 
       if (target.kind === "ship") {
         const damaged = target.takeDamage(bullet.damage);
@@ -370,7 +384,7 @@ export class World {
         this.createAsteroid();
       }
 
-      this.asteroidTimer = 4;
+      this.asteroidTimer = this.asteroidSpawnInterval;
     }
 
     // Shield pickup spawning
@@ -383,7 +397,7 @@ export class World {
         this.createPickup();
       }
 
-      this.pickupTimer = 10;
+      this.pickupTimer = this.pickupSpawnInterval;
     }
 
     this.#sweep();

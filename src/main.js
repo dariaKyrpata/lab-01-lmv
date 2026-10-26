@@ -1,6 +1,11 @@
 import { createLoop } from "./loop.js";
 import { createInput } from "./input.js";
 import { World } from "./sim/world.js";
+import { fetchJson, loadAll } from "./assets/loader.js";
+import { createLoadingScreen } from "./loadingScreen.js";
+import { createAudio } from "./audio.js";
+import { gameEvents } from "./events.js";
+import { Lobby } from "./lobby.js";
 
 document.body.style.margin = "0";
 document.body.style.overflow = "hidden";
@@ -13,7 +18,6 @@ const ctx = canvas.getContext("2d");
 const input = createInput(window);
 
 const world = new World(window.innerWidth, window.innerHeight);
-
 world.createPlayer(input);
 
 const previousStates = new Map();
@@ -22,7 +26,6 @@ let stars = [];
 // Starfield
 function createStars(width, height) {
   const count = Math.max(80, Math.floor((width * height) / 9000));
-
   const items = [];
 
   for (let i = 0; i < count; i++) {
@@ -65,7 +68,7 @@ resizeCanvas();
 window.addEventListener("keydown", (event) => {
   if (
     ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(
-      event.code,
+      event.code
     )
   ) {
     event.preventDefault();
@@ -78,7 +81,10 @@ function lerp(start, end, alpha) {
 }
 
 function lerpAngle(start, end, alpha) {
-  const difference = Math.atan2(Math.sin(end - start), Math.cos(end - start));
+  const difference = Math.atan2(
+    Math.sin(end - start),
+    Math.cos(end - start)
+  );
 
   return start + difference * alpha;
 }
@@ -122,7 +128,6 @@ function drawBackground() {
 
     ctx.beginPath();
     ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-
     ctx.fillStyle = "#ffffff";
     ctx.fill();
 
@@ -136,7 +141,6 @@ function drawBackground() {
       ctx.lineTo(star.x, star.y + star.radius * 2);
 
       ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
-
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -163,8 +167,12 @@ function drawBackground() {
 }
 
 // Pink and white spaceship
+
 function drawShip(ship) {
   if (!ship.alive) return;
+
+  const image = gameAssets?.sprites.ship;
+  if (!image) return;
 
   ctx.save();
 
@@ -175,435 +183,105 @@ function drawShip(ship) {
     ctx.globalAlpha = 0.5;
   }
 
-  // Active protective shield
   if (ship.shieldTime > 0) {
     ctx.beginPath();
     ctx.arc(0, 0, 37, 0, Math.PI * 2);
-
     ctx.strokeStyle = "#4deeea";
     ctx.lineWidth = 2;
-
     ctx.shadowColor = "#4deeea";
     ctx.shadowBlur = 18;
-
     ctx.stroke();
     ctx.shadowBlur = 0;
   }
 
-  // Engine flames
-  if (ship.thrust) {
-    const flameLength = 12 + Math.random() * 8;
+  // The original ship points right; the sprite points up.
+  ctx.rotate(Math.PI / 2);
 
-    ctx.shadowColor = "#ff4fd8";
-    ctx.shadowBlur = 15;
-
-    for (const y of [-15, 15]) {
-      const flame = ctx.createLinearGradient(-14, y, -30 - flameLength, y);
-
-      flame.addColorStop(0, "#ffffff");
-      flame.addColorStop(0.3, "#ffb3ef");
-      flame.addColorStop(0.7, "#ff4fd8");
-      flame.addColorStop(1, "rgba(255, 40, 175, 0)");
-
-      ctx.beginPath();
-      ctx.moveTo(-14, y - 4);
-      ctx.lineTo(-30 - flameLength, y);
-      ctx.lineTo(-14, y + 4);
-      ctx.closePath();
-
-      ctx.fillStyle = flame;
-      ctx.fill();
-    }
-
-    ctx.shadowBlur = 0;
-  }
-
-  // Rear wings
-  for (const side of [-1, 1]) {
-    ctx.save();
-    ctx.scale(1, side);
-
-    ctx.beginPath();
-    ctx.moveTo(-13, 7);
-    ctx.lineTo(-30, 24);
-    ctx.lineTo(-24, 27);
-    ctx.lineTo(-8, 12);
-    ctx.closePath();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#ff4fa3";
-    ctx.lineWidth = 1.5;
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // Main wings
-  for (const side of [-1, 1]) {
-    ctx.save();
-    ctx.scale(1, side);
-
-    ctx.beginPath();
-    ctx.moveTo(8, 6);
-    ctx.lineTo(-5, 12);
-    ctx.lineTo(-25, 32);
-    ctx.lineTo(-31, 33);
-    ctx.lineTo(-18, 10);
-    ctx.closePath();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#ff4fa3";
-    ctx.lineWidth = 2;
-    ctx.fill();
-    ctx.stroke();
-
-    // Pink wing tips
-    ctx.beginPath();
-    ctx.moveTo(-25, 27);
-    ctx.lineTo(-31, 33);
-    ctx.lineTo(-18, 31);
-    ctx.lineTo(-16, 24);
-    ctx.closePath();
-
-    ctx.fillStyle = "#ff4fa3";
-    ctx.fill();
-
-    // Wing details
-    ctx.beginPath();
-    ctx.moveTo(0, 11);
-    ctx.lineTo(-15, 23);
-    ctx.lineTo(-20, 28);
-    ctx.lineTo(-13, 13);
-    ctx.closePath();
-
-    ctx.fillStyle = "#ff92cb";
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  // Main body
-  ctx.beginPath();
-  ctx.moveTo(30, 0);
-  ctx.lineTo(13, -9);
-  ctx.lineTo(-9, -11);
-  ctx.lineTo(-21, -7);
-  ctx.lineTo(-25, 0);
-  ctx.lineTo(-21, 7);
-  ctx.lineTo(-9, 11);
-  ctx.lineTo(13, 9);
-  ctx.closePath();
-
-  ctx.fillStyle = "#f9f9ff";
-  ctx.strokeStyle = "#ff4fa3";
-  ctx.lineWidth = 2;
-  ctx.fill();
-  ctx.stroke();
-
-  // Pink nose
-  ctx.beginPath();
-  ctx.moveTo(30, 0);
-  ctx.lineTo(18, -5);
-  ctx.lineTo(18, 5);
-  ctx.closePath();
-
-  ctx.fillStyle = "#ff4fa3";
-  ctx.fill();
-
-  // Central pink stripe
-  ctx.beginPath();
-  ctx.moveTo(18, 0);
-  ctx.lineTo(9, -3);
-  ctx.lineTo(-17, -3);
-  ctx.lineTo(-21, 0);
-  ctx.lineTo(-17, 3);
-  ctx.lineTo(9, 3);
-  ctx.closePath();
-
-  ctx.fillStyle = "#ff63b1";
-  ctx.fill();
-
-  // Side engines
-  for (const side of [-1, 1]) {
-    ctx.save();
-    ctx.scale(1, side);
-
-    ctx.beginPath();
-    ctx.moveTo(3, 9);
-    ctx.lineTo(-4, 8);
-    ctx.lineTo(-15, 10);
-    ctx.lineTo(-17, 19);
-    ctx.lineTo(-5, 20);
-    ctx.lineTo(3, 15);
-    ctx.closePath();
-
-    ctx.fillStyle = "#f5f5fc";
-    ctx.strokeStyle = "#34394e";
-    ctx.lineWidth = 1.5;
-    ctx.fill();
-    ctx.stroke();
-
-    // Pink engine covers
-    ctx.beginPath();
-    ctx.moveTo(2, 10);
-    ctx.lineTo(-5, 10);
-    ctx.lineTo(-11, 12);
-    ctx.lineTo(-10, 17);
-    ctx.lineTo(-3, 16);
-    ctx.closePath();
-
-    ctx.fillStyle = "#ff4fa3";
-    ctx.fill();
-
-    // Engine exhaust
-    ctx.beginPath();
-    ctx.rect(-18, 11, 5, 8);
-
-    ctx.fillStyle = "#353a51";
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  // Cockpit frame
-  ctx.beginPath();
-  ctx.moveTo(13, 0);
-  ctx.lineTo(4, -7);
-  ctx.lineTo(-7, -6);
-  ctx.lineTo(-13, 0);
-  ctx.lineTo(-7, 6);
-  ctx.lineTo(4, 7);
-  ctx.closePath();
-
-  ctx.fillStyle = "#242b40";
-  ctx.strokeStyle = "#121824";
-  ctx.lineWidth = 2;
-  ctx.fill();
-  ctx.stroke();
-
-  // Blue cockpit glass
-  ctx.beginPath();
-  ctx.moveTo(10, 0);
-  ctx.lineTo(3, -5);
-  ctx.lineTo(-6, -4);
-  ctx.lineTo(-10, 0);
-  ctx.lineTo(-6, 4);
-  ctx.lineTo(3, 5);
-  ctx.closePath();
-
-  const glass = ctx.createLinearGradient(10, -5, -10, 5);
-
-  glass.addColorStop(0, "#9af0ff");
-  glass.addColorStop(0.35, "#29bbff");
-  glass.addColorStop(0.7, "#0875e7");
-  glass.addColorStop(1, "#0737a6");
-
-  ctx.fillStyle = glass;
-  ctx.fill();
-
-  // Cockpit reflection
-  ctx.beginPath();
-  ctx.moveTo(7, -2);
-  ctx.lineTo(2, -4);
-  ctx.lineTo(-5, -3);
-  ctx.lineTo(-1, -1);
-  ctx.closePath();
-
-  ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-  ctx.fill();
+  ctx.drawImage(image, -34, -34, 68, 68);
 
   ctx.restore();
 }
 
 // Bullets
+
 function drawBullet(bullet) {
-  ctx.beginPath();
-  ctx.arc(0, 0, bullet.radius, 0, Math.PI * 2);
+  const image = gameAssets?.sprites.bullet;
 
-  ctx.fillStyle = bullet.homing ? "#4deeea" : "#ffeb70";
+  if (!image) return;
 
-  ctx.shadowColor = ctx.fillStyle;
-  ctx.shadowBlur = 12;
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  ctx.save();
+
+  // The bullet sprite points up, but the game uses right as zero angle.
+  ctx.rotate(Math.PI / 2);
+
+  const width = bullet.homing ? 16 : 12;
+  const height = bullet.homing ? 32 : 24;
+
+  ctx.shadowColor = bullet.homing ? "#4deeea" : "#ff69b4";
+  ctx.shadowBlur = 10;
+
+  ctx.drawImage(
+    image,
+    -width / 2,
+    -height / 2,
+    width,
+    height
+  );
+
+  ctx.restore();
 }
 
 // Detailed asteroids
+
 function drawAsteroid(asteroid) {
+  const image = gameAssets?.sprites.asteroid;
+  if (!image) return;
+
   const radius = asteroid.radius;
+  const size = radius * 2;
 
-  const points = asteroid.shape.map((point) => ({
-    x: Math.cos(point.angle) * radius * point.distance,
-    y: Math.sin(point.angle) * radius * point.distance,
-  }));
+  ctx.save();
 
-  const gradient = ctx.createRadialGradient(
-    -radius * 0.35,
-    -radius * 0.35,
-    radius * 0.15,
-    0,
-    0,
-    radius * 1.15,
+  ctx.drawImage(
+    image,
+    -radius,
+    -radius,
+    size,
+    size
   );
 
-  gradient.addColorStop(0, "#d6d0db");
-  gradient.addColorStop(0.45, "#b5adbc");
-  gradient.addColorStop(0.75, "#8a8297");
-  gradient.addColorStop(1, "#5c566a");
-
-  // Asteroid body
-  ctx.beginPath();
-
-  points.forEach((point, index) => {
-    if (index === 0) {
-      ctx.moveTo(point.x, point.y);
-    } else {
-      ctx.lineTo(point.x, point.y);
-    }
-  });
-
-  ctx.closePath();
-
-  ctx.fillStyle = gradient;
-  ctx.strokeStyle = asteroid.homing ? "#ff5f9c" : "#8f879b";
-
-  ctx.lineWidth = 2;
-  ctx.fill();
-  ctx.stroke();
-
-  // Inner surface
-  ctx.beginPath();
-
-  points.forEach((point, index) => {
-    const x = point.x * 0.82;
-    const y = point.y * 0.82;
-
-    if (index === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-  });
-
-  ctx.closePath();
-
-  ctx.fillStyle = "rgba(90, 84, 103, 0.16)";
-  ctx.fill();
-
-  // Surface highlights
-  ctx.beginPath();
-  ctx.moveTo(-radius * 0.45, -radius * 0.2);
-  ctx.lineTo(-radius * 0.2, -radius * 0.4);
-  ctx.lineTo(-radius * 0.1, -radius * 0.3);
-  ctx.lineTo(-radius * 0.3, -radius * 0.1);
-  ctx.closePath();
-
-  ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(radius * 0.15, -radius * 0.55);
-  ctx.lineTo(radius * 0.38, -radius * 0.45);
-  ctx.lineTo(radius * 0.24, -radius * 0.28);
-  ctx.closePath();
-
-  ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
-  ctx.fill();
-
-  // Craters
-  const seed = asteroid.id * 1.37;
-
-  for (let i = 0; i < 4; i++) {
-    const angle = seed + i * 1.65;
-
-    const distance = 0.28 + ((Math.sin(seed + i * 2.3) + 1) / 2) * 0.28;
-
-    const x = Math.cos(angle) * radius * distance;
-    const y = Math.sin(angle) * radius * distance;
-
-    const craterRadius =
-      radius * (0.12 + ((Math.cos(seed + i * 1.7) + 1) / 2) * 0.1);
-
-    // Crater shadow
-    ctx.beginPath();
-    ctx.arc(
-      x + craterRadius * 0.12,
-      y + craterRadius * 0.12,
-      craterRadius,
-      0,
-      Math.PI * 2,
-    );
-
-    ctx.fillStyle = "rgba(70, 63, 82, 0.65)";
-    ctx.fill();
-
-    // Crater rim
-    ctx.beginPath();
-    ctx.arc(
-      x - craterRadius * 0.12,
-      y - craterRadius * 0.12,
-      craterRadius * 0.92,
-      0,
-      Math.PI * 2,
-    );
-
-    ctx.strokeStyle = "rgba(230, 224, 234, 0.45)";
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-
-    // Crater interior
-    ctx.beginPath();
-    ctx.arc(
-      x + craterRadius * 0.08,
-      y + craterRadius * 0.08,
-      craterRadius * 0.72,
-      0,
-      Math.PI * 2,
-    );
-
-    ctx.fillStyle = "rgba(82, 75, 97, 0.85)";
-    ctx.fill();
-  }
-
-  // Small surface marks
-  for (let i = 0; i < 5; i++) {
-    const angle = seed * 0.7 + i * 1.2;
-    const distance = radius * (0.45 + i * 0.06);
-
-    const x = Math.cos(angle) * distance * 0.55;
-    const y = Math.sin(angle) * distance * 0.55;
-
-    ctx.beginPath();
-    ctx.arc(x, y, radius * 0.055, 0, Math.PI * 2);
-
-    ctx.fillStyle = "rgba(88, 80, 102, 0.75)";
-    ctx.fill();
-  }
-
-  // Homing asteroid glow
   if (asteroid.homing) {
     ctx.beginPath();
     ctx.arc(0, 0, radius + 4, 0, Math.PI * 2);
 
-    ctx.strokeStyle = "rgba(255, 71, 126, 0.45)";
+    ctx.strokeStyle = "#ff5f9c";
     ctx.lineWidth = 2;
     ctx.shadowColor = "#ff477e";
     ctx.shadowBlur = 14;
     ctx.stroke();
-    ctx.shadowBlur = 0;
   }
 
+  ctx.restore();
+
   // Asteroid health bar
-  const barWidth = radius * 2;
-  const healthRatio = asteroid.hp / asteroid.maxHp;
+  const healthRatio = Math.max(
+    0,
+    asteroid.hp / asteroid.maxHp
+  );
 
   ctx.fillStyle = "#3e3140";
-  ctx.fillRect(-radius, -radius - 14, barWidth, 4);
+  ctx.fillRect(-radius, -radius - 14, size, 4);
 
-  ctx.fillStyle = asteroid.homing ? "#ff5f9c" : "#c1a6ff";
+  ctx.fillStyle = asteroid.homing
+    ? "#ff5f9c"
+    : "#c1a6ff";
 
-  ctx.fillRect(-radius, -radius - 14, barWidth * healthRatio, 4);
+  ctx.fillRect(
+    -radius,
+    -radius - 14,
+    size * healthRatio,
+    4
+  );
 }
 
 // Shield pickup
@@ -679,7 +357,13 @@ function drawExplosion(explosion) {
     ctx.globalAlpha = particle.life;
 
     ctx.beginPath();
-    ctx.arc(particle.pos.x, particle.pos.y, particle.radius, 0, Math.PI * 2);
+    ctx.arc(
+      particle.pos.x,
+      particle.pos.y,
+      particle.radius,
+      0,
+      Math.PI * 2
+    );
 
     ctx.fillStyle = explosion.color;
     ctx.fill();
@@ -697,9 +381,11 @@ function drawEntity(entity, alpha) {
   let angle = entity.angle;
 
   if (previous) {
-    const wrappedX = Math.abs(x - previous.x) > world.width / 2;
+    const wrappedX =
+      Math.abs(x - previous.x) > world.width / 2;
 
-    const wrappedY = Math.abs(y - previous.y) > world.height / 2;
+    const wrappedY =
+      Math.abs(y - previous.y) > world.height / 2;
 
     if (!wrappedX) {
       x = lerp(previous.x, x, alpha);
@@ -761,11 +447,8 @@ function drawHudIcon(type, x, y, color) {
     ctx.moveTo(0, 7);
 
     ctx.bezierCurveTo(-3, 4, -10, 0, -10, -5);
-
     ctx.bezierCurveTo(-10, -12, -2, -13, 0, -7);
-
     ctx.bezierCurveTo(2, -13, 10, -12, 10, -5);
-
     ctx.bezierCurveTo(10, 0, 3, 4, 0, 7);
 
     ctx.closePath();
@@ -826,7 +509,6 @@ function drawHudIcon(type, x, y, color) {
 
     for (let i = 0; i < 10; i++) {
       const angle = -Math.PI / 2 + (i * Math.PI) / 5;
-
       const radius = i % 2 === 0 ? 11 : 5;
 
       const px = Math.cos(angle) * radius;
@@ -851,7 +533,6 @@ function drawHudBar(x, y, width, value, maxValue, color) {
   const ratio = Math.max(0, Math.min(1, value / maxValue));
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
-
   ctx.beginPath();
   ctx.roundRect(x, y, width, 7, 3.5);
   ctx.fill();
@@ -905,7 +586,6 @@ function drawHud() {
   ctx.fillText("SPACE CONTROL", 30, 35);
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-
   ctx.beginPath();
   ctx.moveTo(30, 50);
   ctx.lineTo(285, 50);
@@ -938,34 +618,53 @@ function drawHud() {
 
   ctx.fillText(`${hp}/100`, 280, 106);
 
-  drawHudBar(65, 122, 215, hp, 100, hp <= 30 ? "#ff477e" : "#ff69b4");
+  drawHudBar(
+    65,
+    122,
+    215,
+    hp,
+    100,
+    hp <= 30 ? "#ff477e" : "#ff69b4"
+  );
 
   // Shield
-  drawHudIcon("shield", 43, 155, shieldTime > 0 ? "#4deeea" : "#768198");
+  drawHudIcon(
+    "shield",
+    43,
+    155,
+    shieldTime > 0 ? "#4deeea" : "#768198"
+  );
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#ffffff";
   ctx.fillText("SHIELD", 65, 155);
 
   ctx.textAlign = "right";
-
   ctx.fillStyle = shieldTime > 0 ? "#4deeea" : "#8892a8";
 
-  ctx.fillText(shieldTime > 0 ? `${shieldTime.toFixed(1)}s` : "OFF", 280, 155);
+  ctx.fillText(
+    shieldTime > 0 ? `${shieldTime.toFixed(1)}s` : "OFF",
+    280,
+    155
+  );
 
   if (shieldTime > 0) {
     drawHudBar(65, 169, 215, shieldTime, 5, "#4deeea");
   }
 
   // Homing
-  drawHudIcon("target", 43, 199, homingEnabled ? "#c6a0ff" : "#768198");
+  drawHudIcon(
+    "target",
+    43,
+    199,
+    homingEnabled ? "#c6a0ff" : "#768198"
+  );
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#ffffff";
   ctx.fillText("HOMING", 65, 199);
 
   ctx.textAlign = "right";
-
   ctx.fillStyle = homingEnabled ? "#c6a0ff" : "#8892a8";
 
   ctx.fillText(homingEnabled ? "ON" : "OFF", 280, 199);
@@ -982,11 +681,18 @@ function drawHud() {
   ctx.font = "11px monospace";
   ctx.fillStyle = "#9aa5c0";
 
-  ctx.fillText(`FPS: ${stats.fps}  UPS: ${stats.stepsPerSecond}`, 30, 235);
+  ctx.fillText(
+    `FPS: ${stats.fps}  UPS: ${stats.stepsPerSecond}`,
+    30,
+    235
+  );
 
   ctx.textAlign = "right";
-
-  ctx.fillText(`${stats.frameTime.toFixed(1)} ms`, 282, 235);
+  ctx.fillText(
+    `${stats.frameTime.toFixed(1)} ms`,
+    282,
+    235
+  );
 
   // Destroyed ship notification
   if (!player?.alive) {
@@ -995,12 +701,20 @@ function drawHud() {
     ctx.fillStyle = "#ff477e";
     ctx.font = "bold 26px monospace";
 
-    ctx.fillText("SHIP DESTROYED", world.width / 2, world.height / 2 - 25);
+    ctx.fillText(
+      "SHIP DESTROYED",
+      world.width / 2,
+      world.height / 2 - 25
+    );
 
     ctx.font = "16px monospace";
     ctx.fillStyle = "#ffffff";
 
-    ctx.fillText("Respawning...", world.width / 2, world.height / 2 + 10);
+    ctx.fillText(
+      "Respawning...",
+      world.width / 2,
+      world.height / 2 + 10
+    );
   }
 
   // Controls
@@ -1011,7 +725,7 @@ function drawHud() {
   ctx.fillText(
     "ARROWS: Move | SPACE: Fire | F: Single shot | H: Homing",
     world.width / 2,
-    world.height - 20,
+    world.height - 20
   );
 
   ctx.restore();
@@ -1039,4 +753,81 @@ const gameLoop = createLoop({
   render,
 });
 
-gameLoop.start();
+// Asynchronous asset loading
+const audioContext = new AudioContext();
+let gameAssets = null;
+let gameAudio = null;
+gameEvents.addEventListener("fired", () => {
+  gameAudio?.play("shoot");
+});
+
+gameEvents.addEventListener("hit", () => {
+  gameAudio?.play("hit");
+});
+
+gameEvents.addEventListener("exploded", () => {
+  gameAudio?.play("explosion");
+});
+
+
+function unlockAudio() {
+  gameAudio?.unlock();
+}
+
+window.addEventListener("pointerdown", unlockAudio);
+window.addEventListener("keydown", unlockAudio);
+
+async function startGame(){
+  const showLoading = createLoadingScreen(canvas);
+
+  try {
+    showLoading(0, 1);
+
+    const manifest = await fetchJson("/assets/manifest.json");
+
+    const total =
+      Object.keys(manifest.sprites).length +
+      Object.keys(manifest.audio).length +
+      1;
+
+    showLoading(0, total);
+
+    gameAssets = await loadAll(manifest, audioContext, {
+      onProgress(completed, total) {
+        showLoading(completed, total);
+      },
+    });
+
+    world.asteroidSpawnInterval =
+  gameAssets.arena.asteroidSpawnInterval;
+
+world.pickupSpawnInterval =
+  gameAssets.arena.pickupSpawnInterval;
+
+    const lobby = new Lobby();
+
+lobby.addEventListener("join", (event) => {
+  console.log("Player:", event.detail.name);
+  console.log("Room:", event.detail.roomId);
+
+  gameLoop.start();
+});
+
+lobby.show();
+    gameAudio = createAudio(audioContext, gameAssets.audio);
+  } catch (error) {
+    console.error("Game loading failed:", error);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "20px Arial";
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+      "Loading failed. Check the console.",
+      world.width / 2,
+      world.height / 2 + 100
+    );
+  }
+}
+
+startGame();

@@ -1,0 +1,13 @@
+{
+  "sprites": {
+    "ship": "/assets/sprites/ship.png",
+    "bullet": "/assets/sprites/bullet.png",
+    "asteroid": "/assets/sprites/asteroid.png"
+  },
+  "audio": {
+    "shoot": "/assets/audio/shoot.wav",
+    "hit": "/assets/audio/hit.wav",
+    "explosion": "/assets/audio/explosion.wav"
+  },
+  "arena": "/assets/arena.json"
+}

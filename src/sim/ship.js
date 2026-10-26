@@ -1,5 +1,6 @@
 import { Entity } from "./entity.js";
 import { Vector2 } from "./vector.js";
+import { emitGameEvent } from "../events.js";
 
 const ROTATION_SPEED = 3.5;
 const THRUST_POWER = 240;
@@ -90,6 +91,7 @@ export class Ship extends Entity {
     });
 
     this.fireCooldown = 0.2;
+    emitGameEvent("fired", { shipId: this.id });
 
     return bullet;
   }
