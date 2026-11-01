@@ -275,3 +275,42 @@ network communication, and event logging.
 
 Game-state synchronization and multiplayer
 ship movement are outside the scope of Lab 4.
+
+## Performance and reliability tests
+
+### Streaming memory test
+
+Run:
+
+    node server/src/memoryTest.js
+
+The test streamed 100,000 NDJSON events.
+
+Measured results:
+- Initial RSS: 60.61 MB
+- RSS after 100,000 events: 70.66 MB
+- Peak RSS: 71.98 MB
+- Events processed: 100,000
+
+The test demonstrates incremental processing without
+loading the entire log file into memory.
+
+### Slow WebSocket client test
+
+Run:
+
+    node server/src/slowClientTest.js
+
+Measured results:
+- Messages sent: 200
+- Messages received: 200
+- Sender disconnected during test: no
+- Client bufferedAmount after resuming: 0
+
+The receiver was temporarily paused during transmission.
+All messages were received after reading resumed.
+
+This test does not prove that the server's buffer limit
+was reached. It verifies basic behavior under a
+temporarily slow receiver.
+
