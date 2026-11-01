@@ -91,7 +91,8 @@ export class Ship extends Entity {
     });
 
     this.fireCooldown = 0.2;
-    emitGameEvent("fired", { shipId: this.id });
+
+    emitGameEvent("fired", { shipId: this.id }); // надсилання події після пострілу
 
     return bullet;
   }

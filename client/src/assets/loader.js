@@ -1,16 +1,16 @@
-const sleep = (ms, signal) =>
+const sleep = (ms, signal) => // Асинхронне очікування з можливістю скасування
   new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(signal.reason);
       return;
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(() => { // Завершення очікування після затримки
       signal?.removeEventListener("abort", onAbort);
       resolve();
     }, ms);
 
-    function onAbort() {
+    function onAbort() { // Скасування таймера
       clearTimeout(timer);
       reject(signal.reason);
     }
@@ -18,12 +18,12 @@ const sleep = (ms, signal) =>
     signal?.addEventListener("abort", onAbort, { once: true });
   });
 
-export async function fetchJson(url, { signal } = {}) {
+export async function fetchJson(url, { signal } = {}) { // Завантаження JSON з повторними спробами
   return retry(
     async () => {
       const response = await fetch(url, { signal });
 
-      if (!response.ok) {
+      if (!response.ok) { // Перевірка HTTP-відповіді
         const error = new Error(`HTTP ${response.status}: ${url}`);
         error.status = response.status;
         throw error;
@@ -35,43 +35,43 @@ export async function fetchJson(url, { signal } = {}) {
   );
 }
 
-async function retry(operation, { signal, attempts = 3 } = {}) {
+async function retry(operation, { signal, attempts = 3 } = {}) {// Повторення запиту після тимчасових помилок
   for (let attempt = 0; attempt < attempts; attempt++) {
     signal?.throwIfAborted();
 
     try {
       return await operation();
     } catch (error) {
-      if (signal?.aborted) throw error;
+      if (signal?.aborted) throw error;// Не повторюємо скасовані операції
 
-      const retryable =
+      const retryable = //перевірка помилок
         error.status >= 500 ||
         (error.status === undefined &&
           (error instanceof TypeError || error.name === "TimeoutError"));
 
-      if (!retryable || attempt === attempts - 1) {
+      if (!retryable || attempt === attempts - 1) { // Завершення, якщо повторення неможливе
         throw error;
       }
 
-      const delay = 300 * 2 ** attempt + Math.random() * 200;
+      const delay = 300 * 2 ** attempt + Math.random() * 200;// Збільшення затримки з випадковою добавкою
       await sleep(delay, signal);
     }
   }
 }
 
-export async function loadImage(url, { signal } = {}) {
+export async function loadImage(url, { signal } = {}) {// Асинхронне завантаження зображення
   return retry(
     () =>
       new Promise((resolve, reject) => {
         const image = new Image();
 
-        const cleanup = () => {
+        const cleanup = () => {// Очищення обробників подій
           image.onload = null;
           image.onerror = null;
           signal?.removeEventListener("abort", onAbort);
         };
 
-        const onAbort = () => {
+        const onAbort = () => { // Скасування завантаження зображення
           cleanup();
           image.src = "";
           reject(signal.reason);
@@ -82,12 +82,12 @@ export async function loadImage(url, { signal } = {}) {
           return;
         }
 
-        image.onload = () => {
+        image.onload = () => { // Успішне завантаження зображення
           cleanup();
           resolve(image);
         };
 
-        image.onerror = () => {
+        image.onerror = () => { // Помилка завантаження зображення
           cleanup();
           reject(new Error(`Cannot load image: ${url}`));
         };
@@ -99,32 +99,32 @@ export async function loadImage(url, { signal } = {}) {
   );
 }
 
-export async function loadAudio(url, audioContext, { signal } = {}) {
+export async function loadAudio(url, audioContext, { signal } = {}) {// Завантаження та декодування звуку
   const data = await retry(
     async () => {
       const response = await fetch(url, { signal });
 
-      if (!response.ok) {
+      if (!response.ok) { // Перевірка HTTP-відповіді
         const error = new Error(`HTTP ${response.status}: ${url}`);
         error.status = response.status;
         throw error;
       }
 
-      return response.arrayBuffer();
+      return response.arrayBuffer();// Отримання двійкових даних аудіофайлу
     },
     { signal }
   );
 
-  signal?.throwIfAborted();
-  return audioContext.decodeAudioData(data);
+  signal?.throwIfAborted(); // Перевірка скасування перед декодуванням
+  return audioContext.decodeAudioData(data);// Підготовка звуку до відтворення
 }
 
-export async function loadAll(
+export async function loadAll(// Паралельне завантаження всіх ресурсів гри
   manifest,
   audioContext,
   { signal, onProgress = () => {} } = {}
 ) {
-  const entries = [
+  const entries = [ // Створення списку ресурсів із маніфесту
     ...Object.entries(manifest.sprites).map(([name, url]) => ({
       type: "sprites",
       name,
@@ -147,11 +147,11 @@ export async function loadAll(
     arena: null
   };
 
-  await Promise.all(
+  await Promise.all( // Одночасне завантаження ресурсів через Promise.all
     entries.map(async ({ type, name, url }) => {
       let result;
 
-      if (type === "sprites") {
+      if (type === "sprites") {// Вибір функції залежно від типу ресурсу
         result = await loadImage(url, { signal });
         assets.sprites[name] = result;
       } else if (type === "audio") {
@@ -162,7 +162,7 @@ export async function loadAll(
         assets.arena = result;
       }
 
-      completed++;
+      completed++;// Оновлення прогресу завантаження
       onProgress(completed, total, url);
     })
   );

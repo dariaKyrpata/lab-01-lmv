@@ -1,16 +1,16 @@
 {
-  "name": "dogfight",
-  "version": "0.0.0",
+  "name": "space-dogfight",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "devDependencies": {
-    "eslint": "^10.11.0",
-    "prettier": "^3.9.9",
-    "vite": "^8.3.0"
+    "dev:client": "npm run dev --workspace=client",
+    "dev:server": "npm run dev --workspace=server",
+    "build": "npm run build --workspace=client",
+    "start": "npm run start --workspace=server"
   }
 }

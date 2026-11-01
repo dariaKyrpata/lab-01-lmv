@@ -167,13 +167,13 @@ this.pickupSpawnInterval = 10;
   }
 
  
-createExplosion(pos, color = "#ff9f43") {
+createExplosion(pos, color = "#ff9f43") { // Створення вибуху
   const explosion = new Explosion({
     pos: new Vector2(pos.x, pos.y),
     color,
   });
 
-  emitGameEvent("exploded", {
+  emitGameEvent("exploded", {// Надсилання події вибуху
     x: pos.x,
     y: pos.y,
   });
@@ -200,7 +200,7 @@ if (target.kind === "asteroid") {
 
   bullet.destroy();
 
-  emitGameEvent("hit", {
+  emitGameEvent("hit", {// Надсилання події влучання
     targetId: target.id,
   });
 

@@ -6,6 +6,7 @@ import { createLoadingScreen } from "./loadingScreen.js";
 import { createAudio } from "./audio.js";
 import { gameEvents } from "./events.js";
 import { Lobby } from "./lobby.js";
+import { Online } from "./online.js";
 
 document.body.style.margin = "0";
 document.body.style.overflow = "hidden";
@@ -167,7 +168,6 @@ function drawBackground() {
 }
 
 // Pink and white spaceship
-
 function drawShip(ship) {
   if (!ship.alive) return;
 
@@ -194,24 +194,18 @@ function drawShip(ship) {
     ctx.shadowBlur = 0;
   }
 
-  // The original ship points right; the sprite points up.
   ctx.rotate(Math.PI / 2);
-
   ctx.drawImage(image, -34, -34, 68, 68);
 
   ctx.restore();
 }
 
 // Bullets
-
 function drawBullet(bullet) {
   const image = gameAssets?.sprites.bullet;
-
   if (!image) return;
 
   ctx.save();
-
-  // The bullet sprite points up, but the game uses right as zero angle.
   ctx.rotate(Math.PI / 2);
 
   const width = bullet.homing ? 16 : 12;
@@ -232,7 +226,6 @@ function drawBullet(bullet) {
 }
 
 // Detailed asteroids
-
 function drawAsteroid(asteroid) {
   const image = gameAssets?.sprites.asteroid;
   if (!image) return;
@@ -263,7 +256,6 @@ function drawAsteroid(asteroid) {
 
   ctx.restore();
 
-  // Asteroid health bar
   const healthRatio = Math.max(
     0,
     asteroid.hp / asteroid.maxHp
@@ -291,7 +283,6 @@ function drawPickup(pickup) {
 
   ctx.save();
 
-  // Glowing ring
   ctx.beginPath();
   ctx.arc(0, 0, glowSize, 0, Math.PI * 2);
 
@@ -301,7 +292,6 @@ function drawPickup(pickup) {
   ctx.shadowBlur = 18;
   ctx.stroke();
 
-  // Shield body
   ctx.beginPath();
   ctx.moveTo(0, -14);
   ctx.lineTo(11, -9);
@@ -321,7 +311,6 @@ function drawPickup(pickup) {
 
   ctx.shadowBlur = 0;
 
-  // Inner shield
   ctx.beginPath();
   ctx.moveTo(0, -9);
   ctx.lineTo(6, -6);
@@ -335,7 +324,6 @@ function drawPickup(pickup) {
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // Shield symbol
   ctx.beginPath();
   ctx.moveTo(0, -3);
   ctx.lineTo(0, 6);
@@ -566,7 +554,6 @@ function drawHud() {
 
   ctx.save();
 
-  // Dark rounded panel
   ctx.beginPath();
   ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 16);
 
@@ -577,7 +564,6 @@ function drawHud() {
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // HUD title
   ctx.fillStyle = "#ff69b4";
   ctx.font = "bold 13px monospace";
   ctx.textAlign = "left";
@@ -746,7 +732,7 @@ function render(alpha) {
   drawHud();
 }
 
-// Start game loop
+// Game loop
 const gameLoop = createLoop({
   step: 1 / 60,
   simulate,
@@ -755,8 +741,10 @@ const gameLoop = createLoop({
 
 // Asynchronous asset loading
 const audioContext = new AudioContext();
+
 let gameAssets = null;
 let gameAudio = null;
+
 gameEvents.addEventListener("fired", () => {
   gameAudio?.play("shoot");
 });
@@ -769,7 +757,6 @@ gameEvents.addEventListener("exploded", () => {
   gameAudio?.play("explosion");
 });
 
-
 function unlockAudio() {
   gameAudio?.unlock();
 }
@@ -777,13 +764,27 @@ function unlockAudio() {
 window.addEventListener("pointerdown", unlockAudio);
 window.addEventListener("keydown", unlockAudio);
 
-async function startGame(){
+// Online multiplayer lobby and chat
+const online = new Online();
+let gameStarted = false;
+
+online.addEventListener("joined", () => {
+  if (!gameStarted) {
+    gameStarted = true;
+    gameLoop.start();
+  }
+});
+
+// Application startup
+async function startGame() {
   const showLoading = createLoadingScreen(canvas);
 
   try {
     showLoading(0, 1);
 
-    const manifest = await fetchJson("/assets/manifest.json");
+    const manifest = await fetchJson(
+      "/assets/manifest.json"
+    );
 
     const total =
       Object.keys(manifest.sprites).length +
@@ -792,29 +793,36 @@ async function startGame(){
 
     showLoading(0, total);
 
-    gameAssets = await loadAll(manifest, audioContext, {
-      onProgress(completed, total) {
-        showLoading(completed, total);
-      },
-    });
+    gameAssets = await loadAll(
+      manifest,
+      audioContext,
+      {
+        onProgress(completed, count) {
+          showLoading(completed, count);
+        },
+      }
+    );
 
     world.asteroidSpawnInterval =
-  gameAssets.arena.asteroidSpawnInterval;
+      gameAssets.arena.asteroidSpawnInterval;
 
-world.pickupSpawnInterval =
-  gameAssets.arena.pickupSpawnInterval;
+    world.pickupSpawnInterval =
+      gameAssets.arena.pickupSpawnInterval;
+
+    gameAudio = createAudio(
+      audioContext,
+      gameAssets.audio
+    );
 
     const lobby = new Lobby();
 
-lobby.addEventListener("join", (event) => {
-  console.log("Player:", event.detail.name);
-  console.log("Room:", event.detail.roomId);
+    lobby.addEventListener("join", (event) => {
+      const { name, roomId } = event.detail;
 
-  gameLoop.start();
-});
+      online.connect(name, roomId);
+    });
 
-lobby.show();
-    gameAudio = createAudio(audioContext, gameAssets.audio);
+    lobby.show();
   } catch (error) {
     console.error("Game loading failed:", error);
 
