@@ -1,6 +1,11 @@
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 
+import {
+  getShipColor,
+  getAvailableColors,
+} from "../../shared/src/colors.js";
+
 export class Room extends EventEmitter {
   constructor(id, name, maxPlayers = 4) {
     super();
@@ -19,11 +24,24 @@ export class Room extends EventEmitter {
     return this.players.size >= this.maxPlayers;
   }
 
+  get takenColors() {
+    return [...this.players.values()].map(
+      (player) => player.colorId
+    );
+  }
+
+  get availableColors() {
+    return getAvailableColors(this.takenColors);
+  }
+
   get roster() {
-    return [...this.players.values()].map((player) => ({
-      id: player.id,
-      name: player.name
-    }));
+    return [...this.players.values()].map(
+      (player) => ({
+        id: player.id,
+        name: player.name,
+        colorId: player.colorId,
+      })
+    );
   }
 
   toJSON() {
@@ -31,7 +49,8 @@ export class Room extends EventEmitter {
       id: this.id,
       name: this.name,
       players: this.players.size,
-      maxPlayers: this.maxPlayers
+      maxPlayers: this.maxPlayers,
+      takenColors: this.takenColors,
     };
   }
 
@@ -41,16 +60,40 @@ export class Room extends EventEmitter {
     }
 
     if (this.players.has(player.id)) {
-      throw new Error("Player is already in this room");
+      throw new Error(
+        "Player is already in this room"
+      );
     }
+
+    const colorId =
+      player.colorId ?? this.availableColors[0]?.id;
+
+    if (!getShipColor(colorId)) {
+      const error = new Error("Invalid ship color");
+      error.code = "INVALID_COLOR";
+      throw error;
+    }
+
+    if (this.takenColors.includes(colorId)) {
+      const error = new Error(
+        "Color is already taken"
+      );
+
+      error.code = "COLOR_TAKEN";
+      throw error;
+    }
+
+    player.colorId = colorId;
 
     this.players.set(player.id, player);
     this.emit("join", player);
+
     this.emit("event", {
       t: Date.now(),
       type: "join",
       playerId: player.id,
-      name: player.name
+      name: player.name,
+      colorId: player.colorId,
     });
 
     return this.roster;
@@ -59,15 +102,19 @@ export class Room extends EventEmitter {
   leave(playerId) {
     const player = this.players.get(playerId);
 
-    if (!player) return false;
+    if (!player) {
+      return false;
+    }
 
     this.players.delete(playerId);
     this.emit("leave", player);
+
     this.emit("event", {
       t: Date.now(),
       type: "leave",
       playerId,
-      name: player.name
+      name: player.name,
+      colorId: player.colorId,
     });
 
     if (this.players.size === 0) {
@@ -81,7 +128,9 @@ export class Room extends EventEmitter {
     const player = this.players.get(playerId);
 
     if (!player) {
-      throw new Error("Player is not in this room");
+      throw new Error(
+        "Player is not in this room"
+      );
     }
 
     const message = {
@@ -89,7 +138,7 @@ export class Room extends EventEmitter {
       type: "chat",
       playerId,
       name: player.name,
-      text
+      text,
     };
 
     this.emit("chat", message);
@@ -100,7 +149,10 @@ export class Room extends EventEmitter {
 }
 
 export class RoomManager {
-  constructor({ maxRooms = 100, maxPlayers = 4 } = {}) {
+  constructor({
+    maxRooms = 100,
+    maxPlayers = 4,
+  } = {}) {
     this.rooms = new Map();
     this.maxRooms = maxRooms;
     this.maxPlayers = maxPlayers;
@@ -111,14 +163,21 @@ export class RoomManager {
       throw new Error("Room limit reached");
     }
 
-    if (typeof name !== "string" ||
-        !name.trim() ||
-        name.length > 50) {
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      name.length > 50
+    ) {
       throw new Error("Invalid room name");
     }
 
     const id = randomUUID();
-    const room = new Room(id, name.trim(), this.maxPlayers);
+
+    const room = new Room(
+      id,
+      name.trim(),
+      this.maxPlayers
+    );
 
     room.once("empty", () => {
       this.rooms.delete(room.id);
@@ -134,7 +193,9 @@ export class RoomManager {
   }
 
   list() {
-    return [...this.rooms.values()].map((room) => room.toJSON());
+    return [...this.rooms.values()].map(
+      (room) => room.toJSON()
+    );
   }
 
   remove(id) {

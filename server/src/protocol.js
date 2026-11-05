@@ -1,4 +1,13 @@
-export const PROTOCOL_VERSION = 1;
+import {
+  PROTOCOL_VERSION,
+  isInput,
+} from "../../shared/src/protocol/messages.js";
+
+import {
+  getShipColor,
+} from "../../shared/src/colors.js";
+
+export { PROTOCOL_VERSION };
 
 export const MAX_MESSAGE_BYTES = 4096;
 export const MAX_CHAT_LENGTH = 500;
@@ -9,8 +18,19 @@ export const CLOSE_CODES = {
   TOO_LARGE: 1009,
   JOIN_TIMEOUT: 1008,
   RATE_LIMIT: 1008,
-  SERVER_SHUTDOWN: 1001
+  SERVER_SHUTDOWN: 1001,
 };
+
+function invalid(
+  error,
+  closeCode = CLOSE_CODES.INVALID_MESSAGE
+) {
+  return {
+    ok: false,
+    error,
+    closeCode,
+  };
+}
 
 function isObject(value) {
   return (
@@ -28,6 +48,12 @@ function isValidString(value, maxLength) {
   );
 }
 
+function hasOnlyFields(message, allowedFields) {
+  return Object.keys(message).every(
+    (key) => allowedFields.includes(key)
+  );
+}
+
 export function validateMessage(data) {
   let raw;
 
@@ -36,19 +62,14 @@ export function validateMessage(data) {
   } else if (Buffer.isBuffer(data)) {
     raw = data.toString("utf8");
   } else {
-    return {
-      ok: false,
-      error: "Unsupported message format",
-      closeCode: CLOSE_CODES.INVALID_MESSAGE
-    };
+    return invalid("Unsupported message format");
   }
 
   if (Buffer.byteLength(raw, "utf8") > MAX_MESSAGE_BYTES) {
-    return {
-      ok: false,
-      error: "Message too large",
-      closeCode: CLOSE_CODES.TOO_LARGE
-    };
+    return invalid(
+      "Message too large",
+      CLOSE_CODES.TOO_LARGE
+    );
   }
 
   let message;
@@ -56,84 +77,137 @@ export function validateMessage(data) {
   try {
     message = JSON.parse(raw);
   } catch {
-    return {
-      ok: false,
-      error: "Invalid JSON",
-      closeCode: CLOSE_CODES.INVALID_MESSAGE
-    };
+    return invalid("Invalid JSON");
   }
 
   if (!isObject(message)) {
-    return {
-      ok: false,
-      error: "Message must be an object",
-      closeCode: CLOSE_CODES.INVALID_MESSAGE
-    };
+    return invalid("Message must be an object");
   }
 
   if (message.version !== PROTOCOL_VERSION) {
-    return {
-      ok: false,
-      error: "Unsupported protocol version",
-      closeCode: CLOSE_CODES.INVALID_MESSAGE
-    };
+    return invalid("Unsupported protocol version");
   }
 
   switch (message.type) {
+    case "input": {
+      if (!isInput(message)) {
+        return invalid("Invalid input");
+      }
+
+      return {
+        ok: true,
+        message,
+      };
+    }
+
+    case "net_ping": {
+      if (
+        !Number.isFinite(message.clientTime) ||
+        message.clientTime < 0 ||
+        !hasOnlyFields(message, [
+          "version",
+          "type",
+          "clientTime",
+        ])
+      ) {
+        return invalid("Invalid ping");
+      }
+
+      return {
+        ok: true,
+        message,
+      };
+    }
+
+    case "net_config": {
+      const { latency, jitter, drop } = message;
+
+      if (
+        !Number.isFinite(latency) ||
+        latency < 0 ||
+        latency > 500 ||
+        !Number.isFinite(jitter) ||
+        jitter < 0 ||
+        jitter > 200 ||
+        !Number.isFinite(drop) ||
+        drop < 0 ||
+        drop > 0.2 ||
+        !hasOnlyFields(message, [
+          "version",
+          "type",
+          "latency",
+          "jitter",
+          "drop",
+        ])
+      ) {
+        return invalid("Invalid network settings");
+      }
+
+      return {
+        ok: true,
+        message,
+      };
+    }
+
     case "join": {
       if (
         !isValidString(message.room, 100) ||
         !isValidString(message.name, MAX_NAME_LENGTH)
       ) {
-        return {
-          ok: false,
-          error: "Invalid join message",
-          closeCode: CLOSE_CODES.INVALID_MESSAGE
-        };
+        return invalid("Invalid join message");
       }
 
       if (
-        Object.keys(message).some(
-          (key) => !["version", "type", "room", "name"].includes(key)
-        )
+        !hasOnlyFields(message, [
+          "version",
+          "type",
+          "room",
+          "name",
+          "colorId",
+        ])
       ) {
-        return {
-          ok: false,
-          error: "Unexpected join fields",
-          closeCode: CLOSE_CODES.INVALID_MESSAGE
-        };
+        return invalid("Unexpected join fields");
+      }
+
+      if (
+        message.colorId !== undefined &&
+        !getShipColor(message.colorId)
+      ) {
+        return invalid("Invalid ship color");
+      }
+
+      const joinedMessage = {
+        version: PROTOCOL_VERSION,
+        type: "join",
+        room: message.room,
+        name: message.name.trim(),
+      };
+
+      if (message.colorId !== undefined) {
+        joinedMessage.colorId = message.colorId;
       }
 
       return {
         ok: true,
-        message: {
-          version: PROTOCOL_VERSION,
-          type: "join",
-          room: message.room,
-          name: message.name.trim()
-        }
+        message: joinedMessage,
       };
     }
 
     case "chat": {
-      if (!isValidString(message.text, MAX_CHAT_LENGTH)) {
-        return {
-          ok: false,
-          error: "Invalid chat message",
-          closeCode: CLOSE_CODES.INVALID_MESSAGE
-        };
+      if (
+        !isValidString(message.text, MAX_CHAT_LENGTH)
+      ) {
+        return invalid("Invalid chat message");
       }
 
       if (
-        Object.keys(message).some(
-          (key) => !["version", "type", "text"].includes(key)
-        )
+        !hasOnlyFields(message, [
+          "version",
+          "type",
+          "text",
+        ])
       ) {
-        return {
-          ok: false,
-          error: "Unexpected chat fields",
-          closeCode: CLOSE_CODES.INVALID_MESSAGE
-        };
+        return invalid("Unexpected chat fields");
       }
 
       return {
@@ -141,38 +215,31 @@ export function validateMessage(data) {
         message: {
           version: PROTOCOL_VERSION,
           type: "chat",
-          text: message.text.trim()
-        }
+          text: message.text.trim(),
+        },
       };
     }
 
     case "leave": {
       if (
-        Object.keys(message).some(
-          (key) => !["version", "type"].includes(key)
-        )
+        !hasOnlyFields(message, [
+          "version",
+          "type",
+        ])
       ) {
-        return {
-          ok: false,
-          error: "Unexpected leave fields",
-          closeCode: CLOSE_CODES.INVALID_MESSAGE
-        };
+        return invalid("Unexpected leave fields");
       }
 
       return {
         ok: true,
         message: {
           version: PROTOCOL_VERSION,
-          type: "leave"
-        }
+          type: "leave",
+        },
       };
     }
 
     default:
-      return {
-        ok: false,
-        error: "Unknown message type",
-        closeCode: CLOSE_CODES.INVALID_MESSAGE
-      };
+      return invalid("Unknown message type");
   }
 }

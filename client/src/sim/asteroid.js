@@ -43,7 +43,23 @@ export class Asteroid extends Entity {
   update(dt, world) {
     if (!this.alive) return;
 
-    if (this.homing) {
+        if (this.homing && world) {
+      let nearestShip = null;
+      let nearestDistance = Infinity;
+
+      for (const ship of world.ofKind("ship")) {
+        const distance = Math.hypot(
+          ship.pos.x - this.pos.x,
+          ship.pos.y - this.pos.y
+        );
+
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestShip = ship;
+        }
+      }
+
+      this.homing.targetId = nearestShip?.id ?? null;
       this.homing.update(this, world, dt);
     }
 

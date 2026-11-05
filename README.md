@@ -4,6 +4,50 @@
 A browser-based space shooter built with JavaScript,
 Canvas, Vite, and Node.js.
 
+## Lab 5 — Real-Time Networking
+
+Run `npm run dev:server` and `npm run dev:client` in separate terminals. Open two browser windows and join the same room with different player names.
+
+- Binary mode: http://127.0.0.1:5173/?format=binary
+- JSON mode: http://127.0.0.1:5173/?format=json
+
+### Networking design
+
+**Latency.** The server runs the simulation and sends snapshots at 30 Hz. When the client draws its own ship from snapshots alone, it must wait for the input to reach the server and for the resulting snapshot to arrive. Client-side prediction applies the same movement formula locally, so the ship responds immediately. The client also displays its own shots as soon as they are fired and replaces them with the server’s bullets when the corresponding input is acknowledged.
+
+**Consistency.** Each input carries a sequence number (`seq`). Each snapshot includes `lastProcessedSeq`, which tells the client which inputs it can discard. The client starts from the ship state in the snapshot and replays the remaining inputs. The visual correction fades over roughly 100 ms. The shared simulation uses a fixed time step and a seeded random number generator so that the same starting state and inputs produce the same result.
+
+**Cheating.** The server accepts control inputs and validates their format and sequence. It determines positions, hits, health, and scores. A player who changes their ship’s coordinates in the browser cannot use those coordinates to teleport on the server or on other players’ screens.
+
+**Interpolation.** Remote ships and bullets are drawn between server snapshots. The default interpolation delay is 100 ms, about three server ticks. A shorter buffer displays more recent positions but is more likely to run out of snapshots when packets arrive unevenly. A longer buffer makes motion smoother at the cost of showing an older view of the match.
+
+**Determinism experiment.** A controlled test ran 900 reconciliations with six unacknowledged inputs. The original movement formula produced zero positional correction. Adding `Math.random()` to the horizontal velocity in a temporary copy of the client formula increased the mean correction to 4.44 world units and the maximum to 16.18. The game files kept the deterministic formula.
+
+The netgraph shows round-trip time, snapshot age, incoming and outgoing bytes per second, the number of unacknowledged inputs, and the latest correction magnitude. The network simulator can add delay, jitter, and message loss. The demonstration settings are 100 ms of delay per direction, 30 ms of jitter, and 2% loss.
+
+### Binary protocol
+
+Each binary message starts with a version byte (`1`) and a message type byte (`1` for input, `2` for snapshot). Multi-byte values are written with `DataView` in little-endian order.
+
+- An input packet is 12 bytes. After the header, it contains `seq` and `tick` as `Uint32`, turn as `Int8`, and one byte of flags for thrust, fire, and homing.
+- A snapshot contains `tick`, `sentAt`, `lastProcessedSeq`, and the world state. The [snapshot schema](shared/src/codec/binarySnapshot.js) defines the field order. Angles are stored as `Int16` with a step of approximately 0.0055°. Positions and velocities are stored as `Float64`.
+- Room joins, chat, and other control messages use JSON in both modes.
+
+### JSON and binary measurements
+
+| Codec | Bytes per snapshot | Download per client, KB/s | Upload per client, KB/s | Encode + decode, µs |
+|---|---:|---:|---:|---:|
+| JSON | 10,575.7 | 317.27 | 3.01 | 173.3 |
+| Binary (`DataView`) | 3,217.9 | 96.54 | 0.36 | 369.8 |
+
+The benchmark ran in Node.js on 300 snapshots from a four-player simulation. Bandwidth figures are payload estimates at 30 snapshots and 30 inputs per second per client. In this benchmark, the binary format reduced snapshot size by about 70% and took longer to encode and decode.
+
+Run the simulation and codec tests:
+
+```powershell
+node --test shared/test/simulation.test.js shared/test/codec.test.js
+```
+
 ## Lab 4 — Node.js, WebSocket and Streams
 
 This laboratory extends the single-player browser game

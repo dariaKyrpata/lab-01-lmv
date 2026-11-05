@@ -11,7 +11,9 @@ import { attachWebSocketServer } from "./ws.js";
 import { MatchLogger } from "./matchLogger.js";
 import { ReplayManager } from "./replay.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(
+  fileURLToPath(import.meta.url)
+);
 
 const CLIENT_DIST = path.resolve(
   __dirname,
@@ -27,14 +29,16 @@ const replayManager = new ReplayManager(config.logDir);
 let shuttingDown = false;
 
 function sendJson(res, statusCode, data) {
-  if (res.headersSent || res.destroyed) return;
+  if (res.headersSent || res.destroyed) {
+    return;
+  }
 
   const body = JSON.stringify(data);
 
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(body),
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
   });
 
   res.end(body);
@@ -45,7 +49,9 @@ function logError(error) {
 }
 
 function attachRoomLogging(room) {
-  if (room.loggingAttached) return room;
+  if (room.loggingAttached) {
+    return room;
+  }
 
   room.loggingAttached = true;
 
@@ -86,14 +92,23 @@ function attachRoomLogging(room) {
   return room;
 }
 
-function createRoom(name) {
+function createRoom(name, persistent = false) {
   const room = roomManager.create(name);
-  return attachRoomLogging(room);
+
+  attachRoomLogging(room);
+
+  if (persistent) {
+    room.once("empty", () => {
+      createRoom(name, true);
+    });
+  }
+
+  return room;
 }
 
-createRoom("Pink Galaxy");
-createRoom("Asteroid Field");
-createRoom("Deep Space");
+createRoom("Pink Galaxy", true);
+createRoom("Asteroid Field", true);
+createRoom("Deep Space", true);
 
 async function readJsonBody(req) {
   const chunks = [];
@@ -103,7 +118,10 @@ async function readJsonBody(req) {
     size += chunk.length;
 
     if (size > MAX_BODY_BYTES) {
-      const error = new Error("Request body is too large");
+      const error = new Error(
+        "Request body is too large"
+      );
+
       error.statusCode = 413;
       throw error;
     }
@@ -137,7 +155,7 @@ const contentTypes = {
   ".woff2": "font/woff2",
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav",
-  ".ogg": "audio/ogg"
+  ".ogg": "audio/ogg",
 };
 
 async function serveStatic(req, res, pathname) {
@@ -147,8 +165,9 @@ async function serveStatic(req, res, pathname) {
     decodedPath = decodeURIComponent(pathname);
   } catch {
     sendJson(res, 400, {
-      error: "Invalid URL"
+      error: "Invalid URL",
     });
+
     return;
   }
 
@@ -158,8 +177,9 @@ async function serveStatic(req, res, pathname) {
     decodedPath.split("/").includes("..")
   ) {
     sendJson(res, 403, {
-      error: "Forbidden path"
+      error: "Forbidden path",
     });
+
     return;
   }
 
@@ -183,8 +203,9 @@ async function serveStatic(req, res, pathname) {
     path.isAbsolute(relative)
   ) {
     sendJson(res, 403, {
-      error: "Forbidden path"
+      error: "Forbidden path",
     });
+
     return;
   }
 
@@ -198,8 +219,9 @@ async function serveStatic(req, res, pathname) {
       error.code === "ENOTDIR"
     ) {
       sendJson(res, 404, {
-        error: "File not found"
+        error: "File not found",
       });
+
       return;
     }
 
@@ -208,19 +230,22 @@ async function serveStatic(req, res, pathname) {
 
   if (!fileInfo.isFile()) {
     sendJson(res, 404, {
-      error: "File not found"
+      error: "File not found",
     });
+
     return;
   }
 
-  const extension = path.extname(filePath).toLowerCase();
+  const extension = path.extname(
+    filePath
+  ).toLowerCase();
 
   res.writeHead(200, {
     "Content-Type":
       contentTypes[extension] ??
       "application/octet-stream",
     "Content-Length": fileInfo.size,
-    "X-Content-Type-Options": "nosniff"
+    "X-Content-Type-Options": "nosniff",
   });
 
   if (req.method === "HEAD") {
@@ -237,8 +262,9 @@ async function serveStatic(req, res, pathname) {
 async function handleReplayApi(req, res, pathname) {
   if (req.method !== "GET") {
     sendJson(res, 405, {
-      error: "Method not allowed"
+      error: "Method not allowed",
     });
+
     return;
   }
 
@@ -253,12 +279,15 @@ async function handleReplayApi(req, res, pathname) {
 
   if (!pathname.startsWith(prefix)) {
     sendJson(res, 404, {
-      error: "Replay endpoint not found"
+      error: "Replay endpoint not found",
     });
+
     return;
   }
 
-  const encodedFileName = pathname.slice(prefix.length);
+  const encodedFileName = pathname.slice(
+    prefix.length
+  );
 
   let fileName;
 
@@ -266,15 +295,17 @@ async function handleReplayApi(req, res, pathname) {
     fileName = decodeURIComponent(encodedFileName);
   } catch {
     sendJson(res, 400, {
-      error: "Invalid replay filename"
+      error: "Invalid replay filename",
     });
+
     return;
   }
 
   if (!replayManager.validFileName(fileName)) {
     sendJson(res, 400, {
-      error: "Invalid replay filename"
+      error: "Invalid replay filename",
     });
+
     return;
   }
 
@@ -287,8 +318,9 @@ async function handleReplayApi(req, res, pathname) {
   } catch (error) {
     if (error.code === "ENOENT") {
       sendJson(res, 404, {
-        error: "Replay not found"
+        error: "Replay not found",
       });
+
       return;
     }
 
@@ -297,33 +329,53 @@ async function handleReplayApi(req, res, pathname) {
 
   if (!fileInfo.isFile()) {
     sendJson(res, 404, {
-      error: "Replay not found"
+      error: "Replay not found",
     });
+
     return;
   }
 
   res.writeHead(200, {
-    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "Content-Type":
+      "application/x-ndjson; charset=utf-8",
     "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff"
+    "X-Content-Type-Options": "nosniff",
   });
 
   await replayManager.stream(fileName, res);
 }
 
 async function handleApi(req, res, pathname) {
+  if (pathname === "/api/stats") {
+    if (req.method !== "GET") {
+      sendJson(res, 405, {
+        error: "Method not allowed",
+      });
+
+      return;
+    }
+
+    sendJson(res, 200, {
+      matches: websocket.getStats(),
+    });
+
+    return;
+  }
+
   if (pathname === "/health") {
     if (req.method !== "GET") {
       sendJson(res, 405, {
-        error: "Method not allowed"
+        error: "Method not allowed",
       });
+
       return;
     }
 
     sendJson(res, 200, {
       status: "ok",
-      service: "dogfight-server"
+      service: "dogfight-server",
     });
+
     return;
   }
 
@@ -353,8 +405,9 @@ async function handleApi(req, res, pathname) {
         body.name.trim().length > 50
       ) {
         sendJson(res, 400, {
-          error: "Room name must contain 1–50 characters"
+          error: "Room name must contain 1–50 characters",
         });
+
         return;
       }
 
@@ -365,13 +418,14 @@ async function handleApi(req, res, pathname) {
     }
 
     sendJson(res, 405, {
-      error: "Method not allowed"
+      error: "Method not allowed",
     });
+
     return;
   }
 
   sendJson(res, 404, {
-    error: "API endpoint not found"
+    error: "API endpoint not found",
   });
 }
 
@@ -379,8 +433,9 @@ const server = http.createServer(async (req, res) => {
   try {
     if (shuttingDown) {
       sendJson(res, 503, {
-        error: "Server is shutting down"
+        error: "Server is shutting down",
       });
+
       return;
     }
 
@@ -405,8 +460,9 @@ const server = http.createServer(async (req, res) => {
       req.method !== "HEAD"
     ) {
       sendJson(res, 405, {
-        error: "Method not allowed"
+        error: "Method not allowed",
       });
+
       return;
     }
 
@@ -425,7 +481,7 @@ const server = http.createServer(async (req, res) => {
       error:
         statusCode >= 500
           ? "Internal server error"
-          : error.message
+          : error.message,
     });
   }
 });
@@ -438,11 +494,15 @@ const websocket = attachWebSocketServer(
 );
 
 async function shutdown(signal) {
-  if (shuttingDown) return;
+  if (shuttingDown) {
+    return;
+  }
 
   shuttingDown = true;
 
-  console.log(`\nReceived ${signal}. Shutting down...`);
+  console.log(
+    `\nReceived ${signal}. Shutting down...`
+  );
 
   try {
     await websocket.close();
