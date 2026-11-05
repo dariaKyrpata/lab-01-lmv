@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { RoomManager } from "./rooms.js";
+import { RoomManager } from "./rooms.ts";
 
 function createPlayer(id, name) {
   return { id, name };

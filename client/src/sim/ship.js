@@ -1,6 +1,6 @@
 import { Entity } from "./entity.js";
 import { Vector2 } from "./vector.js";
-import { emitGameEvent } from "../events.js";
+import { emitGameEvent } from "../events.ts";
 
 const ROTATION_SPEED = 3.5;
 const THRUST_POWER = 240;

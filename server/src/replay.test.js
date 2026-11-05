@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
 
-import { ReplayManager } from "./replay.js";
+import { ReplayManager } from "./replay.ts";
 
 async function createFixture() {
   const logDir = await mkdtemp(

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { once } from "node:events";
 
-import { ReplayManager } from "./replay.js";
+import { ReplayManager } from "./replay.ts";
 
 function memoryMB() {
   return (process.memoryUsage().rss / 1024 / 1024).toFixed(2);

@@ -4,6 +4,37 @@
 A browser-based space shooter built with JavaScript,
 Canvas, Vite, and Node.js.
 
+## Lab 6 — TypeScript
+
+The shared simulation, codecs, WebSocket server, and browser game run from TypeScript source. Use Node.js 22.18 or newer for native type stripping on the server. Vite handles the browser build. Earlier standalone exercises and server integration test drivers remain in JavaScript.
+
+```powershell
+npm ci
+npm run typecheck
+npm run typecheck --workspaces
+npm test
+npm run build
+```
+
+TypeScript checks code before it runs. The server still validates untrusted inputs at runtime. Zod schemas check JSON messages and the server environment. Binary readers check packet length, version, flags, and numeric fields. The snapshot schema validates the decoded result.
+
+### What TypeScript found
+
+- Asteroid collisions wrote directly into vector coordinates. The collision code now replaces the vector, which lets the shared vector type protect its coordinates with `readonly`.
+- A roster entry could arrive before its ship appeared in the current snapshot. Ship lookup now checks that the ID exists and belongs to a ship before reading its color or score.
+- DOM queries can return `null` or the wrong element type. The lobby, chat, and netgraph now check required elements when constructing their UI.
+- The connection queue could yield an undefined entry under indexed access. The send loop now checks the entry before sending it.
+
+### Three types
+
+- **`EntityId`, `Tick`, and `Seq`** are branded numbers. They are ordinary numbers on the wire, but TypeScript rejects passing a tick where an entity ID is expected.
+- **`EntitySnapshot`** is a union of snapshots distinguished by `kind`. Checking for `"ship"` makes its health and color available. The exhaustive rendering and restoration switches reject a new kind at typecheck time until it has a handler.
+- **`Bus<Events>`** links each event name to its payload. A listener for `fired` can read `shipId` without guessing which event it received.
+
+A local comparison against Lab 5 produced identical simulation snapshots over 1,000 ticks with four players and the same seed and inputs.
+
+The lobby and HUD keep the existing DOM and Canvas code. Their UI is small, so a framework would add a new build and rendering layer without simplifying this migration.
+
 ## Lab 5 — Real-Time Networking
 
 Run `npm run dev:server` and `npm run dev:client` in separate terminals. Open two browser windows and join the same room with different player names.
@@ -45,7 +76,7 @@ The benchmark ran in Node.js on 300 snapshots from a four-player simulation. Ban
 Run the simulation and codec tests:
 
 ```powershell
-node --test shared/test/simulation.test.js shared/test/codec.test.js
+node --test shared/test/simulation.test.ts shared/test/codec.test.ts
 ```
 
 ## Lab 4 — Node.js, WebSocket and Streams

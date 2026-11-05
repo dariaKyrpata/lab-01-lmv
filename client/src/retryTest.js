@@ -1,4 +1,4 @@
-import { fetchJson } from "./assets/loader.js";
+import { fetchJson } from "./assets/loader.ts";
 
 export async function runRetryTest() {
   const originalFetch = window.fetch;

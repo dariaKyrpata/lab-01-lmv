@@ -6,7 +6,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { MatchLogger } from "./matchLogger.js";
+import { MatchLogger } from "./matchLogger.ts";
 
 test("MatchLogger writes NDJSON events", async () => {
   const logDir = await mkdtemp(

@@ -5,7 +5,7 @@ import {
   validateMessage,
   PROTOCOL_VERSION,
   MAX_MESSAGE_BYTES
-} from "./protocol.js";
+} from "./protocol.ts";
 
 function validate(message) {
   return validateMessage(

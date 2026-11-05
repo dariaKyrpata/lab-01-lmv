@@ -6,7 +6,7 @@ import { Pickup } from "./pickup.js";
 import { Explosion } from "./explosion.js";
 import { Homing } from "./homing.js";
 import { findCollisions } from "./collision.js";
-import { emitGameEvent } from "../events.js";
+import { emitGameEvent } from "../events.ts";
 
 export class World {
   #entities = new Map();
