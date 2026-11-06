@@ -2,7 +2,9 @@
 
 Space Dogfight is a multiplayer space shooter for the browser. Pilot a ship, dodge asteroids, and fight in a shared arena. Destroy asteroids for points and earn five points for taking down another ship.
 
-[![Dogfight CI](https://github.com/9711556-ops/lab-01-lmv/actions/workflows/typecheck.yml/badge.svg?branch=lab-08-production)](https://github.com/9711556-ops/lab-01-lmv/actions/workflows/typecheck.yml)
+[![Dogfight CI](https://github.com/dariaKyrpata/lab-01-lmv/actions/workflows/typecheck.yml/badge.svg?branch=lab-08-production)](https://github.com/dariaKyrpata/lab-01-lmv/actions/workflows/typecheck.yml)
+
+[Play Space Dogfight](https://space-dogfight-daria.onrender.com/) · [Server health](https://space-dogfight-daria.onrender.com/health) · [Live metrics](https://space-dogfight-daria.onrender.com/metrics)
 
 ## Play locally
 
@@ -49,7 +51,7 @@ To run the production smoke test against a fresh local Node process, build the c
 
 The release workflow runs on `v*` tags. It builds and tests the image, then publishes the tagged image to GitHub Container Registry. Configure the hosting service once.
 
-1. In GitHub Packages, grant Render read access to the image or make the package public. The tagged image is `ghcr.io/9711556-ops/lab-01-lmv:v1.0.0`.
+1. In GitHub Packages, grant Render read access to the image or make the package public. The tagged image is `ghcr.io/dariakyrpata/lab-01-lmv:v1.0.0`.
 2. In Render, create a Web Service from **Existing Image** and point it at that image. Keep one instance. Set the health check path to `/ready`. The app recognizes `RENDER_EXTERNAL_URL` as an allowed origin. If you add a custom domain, include its HTTPS origin in `ALLOWED_ORIGINS`.
 3. Set `TRUST_PROXY=1` for an instance reachable only through a proxy that appends the connecting IP to `X-Forwarded-For`. See [Render WebSockets](https://render.com/docs/websocket) and [deploying an image](https://render.com/docs/deploying-an-image).
 4. Store the Render deploy hook in the GitHub Actions secret `RENDER_DEPLOY_HOOK_URL` and the HTTPS address in the repository variable `RENDER_PUBLIC_URL`. Rerun the release after adding them. The workflow checks the public SHA and opens a WSS session through the proxy. See [Render deploy hooks](https://render.com/docs/deploy-hooks).
@@ -59,7 +61,13 @@ The release workflow runs on `v*` tags. It builds and tests the image, then publ
 
 Rooms live in one process, so a restart sends players back to the lobby and clears the match. The local load figures below come from the development machine. Hosting capacity depends on the instance's CPU and network. Replay files use local storage, which is ephemeral on a free Render instance. The demo room and bot APIs have no accounts. For a larger deployment I would add authenticated room controls, matchmaking, lag compensation, and either routing by room or a Redis backplane before adding instances.
 
-Public URL, hosted RTT, an uptime monitor, and the recorded demo depend on the live deployment. The browser test uses mobile emulation. The installation on a physical phone can be checked once the HTTPS address is available.
+### Live verification
+
+Release `v1.0.0` is live on a single free Render instance in Frankfurt. The public `/health` endpoint reported commit `265c24cf02586a0d559f830bef88316b9d2aab37`. Two test clients on the same network joined Pink Galaxy over WSS and delivered a chat message. Their sampled netgraph RTTs were 56 ms and 53 ms. [Release workflow](https://github.com/dariaKyrpata/lab-01-lmv/actions/runs/42270813273)
+
+The first deploy was configured in the Render dashboard. GitHub Actions needs the Render deploy hook and public URL configured in the repository to deploy future tags automatically.
+
+The separate-network match, uptime monitoring, physical phone installation, and recorded demo are pending.
 
 ## Lab 7 — Engines, Memory, and Tests
 
