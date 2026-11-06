@@ -16,7 +16,7 @@ npm run build
 npm start
 ```
 
-[Open the local lobby](http://127.0.0.1:3000/). Pick the same room as a friend and choose a different ship color. Use the arrow keys to steer and accelerate, Space to fire, F for a single shot, and H for homing. On a touch screen, use the steering, thrust, and fire buttons. The browser can install the game from its menu when it is served over HTTPS. Online matches require a connection.
+[Open the local lobby](http://127.0.0.1:3000/). Pick the same room as a friend and choose a different ship color. Use the arrow keys to steer and accelerate, Space to fire, F for a single shot, and H for homing. On a touch screen, drag the joystick on the right to steer and accelerate. Tap or hold Fire on the left to shoot. The browser can install the game from its menu when it is served over HTTPS. Online matches require a connection.
 
 ## Lab 8 — Production and deployment
 

@@ -21,7 +21,7 @@ type RenderEntity = SimEntity | EntitySnapshot;
 import { createLoop } from "./loop.ts";
 import { createInput } from "./input.ts";
 import { World } from "../../shared/src/sim/world.ts";
-import { FIXED_DT } from "../../shared/src/movement.ts";
+import { FIXED_DT, normalizeAngle, ROTATION_SPEED } from "../../shared/src/movement.ts";
 import { Prediction } from "./prediction.ts";
 import type { RenderSample } from "./interpolation.ts";
 import { Interpolation } from "./interpolation.ts";
@@ -201,15 +201,25 @@ function simulate() {
 
   const left = !typing && input.isDown("ArrowLeft");
   const right = !typing && input.isDown("ArrowRight");
+  let turn: InputPayload["turn"] = left === right ? 0 : right ? 1 : -1;
+  let thrust = !typing && input.isDown("ArrowUp");
+  const angle = prediction.currentState?.angle ?? world.player?.angle;
+  if (!typing && input.touchHeading !== null && angle !== undefined) {
+    const difference = normalizeAngle(input.touchHeading - angle);
+    const tolerance = ROTATION_SPEED * FIXED_DT / 2;
+    turn = Math.abs(difference) <= tolerance ? 0 : difference > 0 ? 1 : -1;
+    thrust = Math.abs(difference) <= Math.PI / 4;
+  }
+  const firePressed = !typing && input.justPressed("Space");
   const message: InputPayload = {
     type: "input",
     seq: SeqSchema.parse(seq + 1),
     tick: world.tick,
-    thrust: !typing && input.isDown("ArrowUp"),
-    turn: left === right ? 0 : right ? 1 : -1,
+    thrust,
+    turn,
     fire:
       !typing &&
-      (input.isDown("Space") || singleShot),
+      (input.isDown("Space") || firePressed || singleShot),
     homing: homingEnabled,
   };
 
