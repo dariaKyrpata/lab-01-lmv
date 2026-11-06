@@ -1,0 +1,17 @@
+{
+  "gitSha": "dev",
+  "runtime": "Windows drain handler via IPC",
+  "shutdownMs": 36.03,
+  "closeCode": 1001,
+  "floodQueuedMs": 55.01,
+  "healthyTickP99BeforeMs": 2.752,
+  "healthyTickP99AfterMs": 2.752,
+  "rejections": {
+    "origin": 2,
+    "payload_too_large": 1,
+    "rate_limit": 1,
+    "join_timeout": 1,
+    "ip_limit": 1,
+    "invalid_message": 1
+  }
+}

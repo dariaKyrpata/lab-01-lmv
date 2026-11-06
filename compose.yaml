@@ -1,0 +1,11 @@
+services:
+  dogfight:
+    build:
+      context: .
+      args:
+        BUILD_SHA: ${BUILD_SHA:-dev}
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      ALLOWED_ORIGINS: http://127.0.0.1:3000,http://localhost:3000
+    stop_grace_period: 10s

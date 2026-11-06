@@ -1,0 +1,66 @@
+name: Dogfight Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: dogfight-production
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck && npm run lint && npm test
+      - name: Build and verify the release image
+        id: image
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:$GITHUB_REF_NAME"
+          bash scripts/container-ci.sh "$image"
+          echo "ref=$image" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-container-smoke
+          path: container-smoke.json
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish to GHCR
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: docker push "$IMAGE"
+      - name: Deploy on Render and check the published commit
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          PUBLIC_URL: ${{ vars.RENDER_PUBLIC_URL }}
+        run: |
+          if [[ -z "$DEPLOY_HOOK" || -z "$PUBLIC_URL" ]]; then
+            echo "::warning::Image published. Configure RENDER_DEPLOY_HOOK_URL and RENDER_PUBLIC_URL to deploy on Render."
+            exit 0
+          fi
+          curl --fail --silent --show-error --get --data-urlencode "imgURL=$IMAGE" "$DEPLOY_HOOK" >/dev/null
+          sha="$(git rev-parse HEAD)"
+          for attempt in {1..36}; do
+            if curl --fail --silent --max-time 8 "${PUBLIC_URL%/}/health" | jq -e --arg sha "$sha" '.gitSha == $sha' >/dev/null; then
+              node scripts/check-live.mjs "$PUBLIC_URL"
+              echo "Public build verified at $PUBLIC_URL" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Render did not report the tagged commit"
+          exit 1

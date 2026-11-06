@@ -1,3 +1,7 @@
+import { config } from "./config.ts";
+import { logger } from "./logger.ts";
+import { recordFrame, recordRejection } from "./metrics.ts";
+import { clientIp, originAllowed } from "./handshake.ts";
 import { startHeartbeat } from "./heartbeat.ts";
 import type { SnapshotPayload } from "../../shared/src/protocol/messages.ts";
 import { TokenBucket } from "./rateLimit.ts";
@@ -19,6 +23,7 @@ import type { Room, RoomManager, Player } from "./rooms.ts";
 import type { ServerPayload, ClientMessage } from "../../shared/src/protocol/messages.ts";
 
 export class GameSocket extends WebSocket {
+  ip = "unknown";
   player: Player | null = null;
   room: Room | null = null;
   missedPongs = 0;
@@ -41,6 +46,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
 
   const matches = new Map<string, Match>();
   let closing = false;
+  const ips = new Map<string, number>();
   const frames = new WeakMap<SnapshotPayload["state"], Map<string, string | ArrayBuffer>>();
 
   function encodeFrame(message: SnapshotPayload, format: GameSocket["wireFormat"]) {
@@ -63,6 +69,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
     }
 
     if (socket.bufferedAmount > MAX_BUFFERED_BYTES) {
+      recordRejection("slow_client");
       if (critical) {
         socket.close(1013, "Client too slow");
       }
@@ -78,6 +85,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
       }
 
       if (socket.bufferedAmount > MAX_BUFFERED_BYTES) {
+        recordRejection("slow_client");
         if (critical) {
           socket.close(1013, "Client too slow");
         }
@@ -86,14 +94,15 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
       }
 
       try {
+        recordFrame("out", typeof data === "string" ? Buffer.byteLength(data) : data.byteLength);
         socket.send(data, (error) => {
           if (error) {
-            console.error("WebSocket send failed:", error);
+            logger.warn({ err: error, roomId: socket.room?.id, playerId: socket.player?.id }, "WebSocket send failed");
             socket.terminate();
           }
         });
       } catch (error: unknown) {
-        console.error("WebSocket send failed:", error);
+        logger.warn({ err: error, roomId: socket.room?.id, playerId: socket.player?.id }, "WebSocket send failed");
         socket.terminate();
       }
     };
@@ -157,6 +166,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
 
     matches.get(room.id)?.removePlayer(player.id);
     room.leave(player.id);
+    logger.info({ roomId: room.id, playerId: player.id }, "player left");
 
     if (room.players.size > 0) {
       broadcastRoster(room);
@@ -175,6 +185,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
 
     const joinTimer = setTimeout(() => {
       if (!socket.room) {
+        recordRejection("join_timeout");
         socket.close(
           CLOSE_CODES.JOIN_TIMEOUT,
           "Join timeout"
@@ -187,7 +198,11 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
     });
 
     socket.on("message", (data, isBinary) => {
+      if (closing || socket.readyState !== WebSocket.OPEN) return;
+      recordFrame("in", Array.isArray(data) ? data.reduce((sum, chunk) => sum + chunk.byteLength, 0) : data.byteLength);
       if (!limiter.take(performance.now())) {
+        recordRejection("rate_limit");
+        logger.warn({ roomId: socket.room?.id, playerId: socket.player?.id }, "message rate exceeded");
         socket.close(
           CLOSE_CODES.RATE_LIMIT,
           "Rate limit exceeded"
@@ -203,14 +218,16 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
           if (socket.wireFormat !== "binary") throw new Error("Binary format is not enabled");
           message = serverBinaryCodec.decode(data);
         } catch (error: unknown) {
-          console.warn("Rejected binary input:", error instanceof Error ? error.message : String(error));
+          recordRejection("invalid_binary");
+          logger.warn({ roomId: socket.room?.id, playerId: socket.player?.id }, "rejected binary input");
           socket.close(CLOSE_CODES.INVALID_MESSAGE, "Invalid binary input");
           return;
         }
       } else {
         const result = validateMessage(data);
         if (!result.ok) {
-          console.warn("Rejected client message:", result.error);
+          recordRejection("invalid_message");
+          logger.warn({ roomId: socket.room?.id, playerId: socket.player?.id }, "rejected client message");
           socket.close(result.closeCode, result.error.slice(0, 100));
           return;
         }
@@ -283,6 +300,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
           if (!player) throw new Error("Joined player is missing");
           socket.player = player;
           socket.room = room;
+          logger.info({ roomId: room.id, playerId: player.id }, "player joined");
           clearTimeout(joinTimer);
 
           const match = getOrCreateMatch(room);
@@ -355,10 +373,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
                 });
               }
             } catch (error: unknown) {
-              console.error(
-                "Delayed message failed:",
-                error
-              );
+              logger.error({ err: error, roomId: room.id, playerId: player.id }, "delayed message failed");
 
               socket.close(
                 1011,
@@ -401,10 +416,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
         }
         }
       } catch (error: unknown) {
-        console.error(
-          "WebSocket message error:",
-          error
-        );
+        logger.error({ err: error, roomId: socket.room?.id, playerId: socket.player?.id }, "WebSocket handler failed");
 
         socket.close(
           CLOSE_CODES.INVALID_MESSAGE,
@@ -414,23 +426,27 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
     });
 
     socket.on("close", () => {
+      const remaining = (ips.get(socket.ip) ?? 1) - 1;
+      if (remaining > 0) ips.set(socket.ip, remaining);
+      else ips.delete(socket.ip);
       clearTimeout(joinTimer);
       socket.network.close();
 
       try {
         leaveRoom(socket);
       } catch (error: unknown) {
-        console.error("Room leave error:", error);
+        logger.error({ err: error }, "room leave failed");
       }
     });
 
     socket.on("error", (error) => {
-      console.error("WebSocket error:", error);
+      if ("code" in error && error.code === "WS_ERR_UNSUPPORTED_MESSAGE_LENGTH") recordRejection("payload_too_large");
+      logger.warn({ err: error, roomId: socket.room?.id, playerId: socket.player?.id }, "WebSocket error");
     });
   });
 
   wss.on("error", (error) => {
-    console.error("WebSocket server error:", error);
+    logger.error({ err: error }, "WebSocket server error");
   });
 
   server.on("upgrade", (request, socket, head) => {
@@ -456,11 +472,28 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
       return;
     }
 
+    const ip = clientIp(request, config.trustProxy);
+    const count = ips.get(ip) ?? 0;
+    if (!originAllowed(request.headers.origin, config)) {
+      recordRejection("origin");
+      logger.warn({ reason: "origin" }, "WebSocket upgrade rejected");
+      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+      return;
+    }
+    if (count >= config.maxConnectionsPerIp) {
+      recordRejection("ip_limit");
+      logger.warn({ reason: "ip_limit" }, "WebSocket upgrade rejected");
+      socket.end("HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+      return;
+    }
+
     wss.handleUpgrade(
       request,
       socket,
       head,
       (websocket) => {
+        websocket.ip = ip;
+        ips.set(ip, count + 1);
         wss.emit("connection", websocket, request);
       }
     );
@@ -480,6 +513,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
       socket.network.close();
 
       if (socket.readyState === WebSocket.OPEN) {
+        send(socket, { type: "shutdown", message: "Сервер перезапускається. Повертаємося в лобі." });
         socket.close(
           CLOSE_CODES.SERVER_SHUTDOWN,
           "Server shutting down"

@@ -1,3 +1,5 @@
+import { logger } from "./logger.ts";
+import { collectMetrics } from "./metrics.ts";
 import { performance } from "node:perf_hooks";
 import http from "node:http";
 import path from "node:path";
@@ -38,11 +40,13 @@ const CLIENT_DIST = path.resolve(
 
 const MAX_BODY_BYTES = 4096;
 
-const roomManager = new RoomManager({ maxPlayers: config.roomCapacity });
+const roomManager = new RoomManager({ maxPlayers: config.roomCapacity, maxRooms: config.maxRooms });
 const matchLogger = new MatchLogger(config.logDir);
 const replayManager = new ReplayManager(config.logDir);
 
 let shuttingDown = false;
+let ready = false;
+const pendingLogs = new Set<Promise<void>>();
 
 function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
   if (res.headersSent || res.destroyed) {
@@ -60,10 +64,6 @@ function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
   res.end(body);
 }
 
-function logError(error: unknown) {
-  console.error("Server error:", error);
-}
-
 function attachRoomLogging(room: Room) {
   if (room.loggingAttached) {
     return room;
@@ -78,11 +78,11 @@ function attachRoomLogging(room: Room) {
     task = task
       .then(operation)
       .catch((error) => {
-        console.error(
-          `Logging error for room ${room.id}:`,
-          error
-        );
+        logger.error({ err: error, roomId: room.id }, "room log failed");
       });
+    const current = task;
+    pendingLogs.add(current);
+    void current.then(() => { pendingLogs.delete(current); });
   }
 
   room.on("event", (event) => {
@@ -115,16 +115,14 @@ function createRoom(name: string, persistent = false) {
 
   if (persistent) {
     room.once("empty", () => {
-      createRoom(name, true);
+      if (!shuttingDown) createRoom(name, true);
     });
   }
 
   return room;
 }
 
-createRoom("Pink Galaxy", true);
-createRoom("Asteroid Field", true);
-createRoom("Deep Space", true);
+for (const name of ["Pink Galaxy", "Asteroid Field", "Deep Space"].slice(0, config.maxRooms)) createRoom(name, true);
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
@@ -155,6 +153,7 @@ const contentTypes: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -375,6 +374,21 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
     return;
   }
 
+  if (pathname === "/ready" || pathname === "/metrics") {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    if (pathname === "/ready") {
+      sendJson(res, ready ? 200 : 503, { ready });
+    } else {
+      let players = 0;
+      for (const room of roomManager.rooms.values()) players += room.players.size;
+      sendJson(res, 200, collectMetrics(roomManager.rooms.size, players, websocket.getStats()));
+    }
+    return;
+  }
+
   if (pathname === "/health") {
     if (req.method !== "GET") {
       sendJson(res, 405, {
@@ -387,6 +401,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
     sendJson(res, 200, {
       status: "ok",
       service: "dogfight-server",
+      gitSha: config.buildSha,
     });
 
     return;
@@ -438,6 +453,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
         return;
       }
 
+      if (roomManager.rooms.size >= config.maxRooms) {
+        sendJson(res, 429, { error: "Room limit reached" });
+        return;
+      }
       const room = createRoom(parsed.data.name);
 
       sendJson(res, 201, room.toJSON());
@@ -458,7 +477,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (shuttingDown) {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const pathname = url.pathname;
+    if (shuttingDown && pathname !== "/health" && pathname !== "/ready" && pathname !== "/metrics") {
       sendJson(res, 503, {
         error: "Server is shutting down",
       });
@@ -466,15 +487,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const url = new URL(
-      req.url ?? "/",
-      `http://${req.headers.host ?? "localhost"}`
-    );
-
-    const pathname = url.pathname;
 
     if (
-      pathname === "/health" ||
+      pathname === "/health" || pathname === "/ready" || pathname === "/metrics" ||
       pathname === "/api" ||
       pathname.startsWith("/api/")
     ) {
@@ -495,7 +510,7 @@ const server = http.createServer(async (req, res) => {
 
     await serveStatic(req, res, pathname);
   } catch (error) {
-    console.error("Request error:", error);
+    if (!(error instanceof HttpError)) logger.error({ err: error }, "HTTP handler failed");
 
     if (res.headersSent) {
       res.destroy();
@@ -513,66 +528,47 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.on("error", logError);
+function fatal(error: unknown, source: string): never {
+  logger.fatal({ err: error instanceof Error ? error : new Error("Non-Error failure"), source }, "server terminated");
+  process.exit(1);
+}
 
-const websocket = attachWebSocketServer(
-  server,
-  roomManager
-);
+server.on("error", error => fatal(error, "http_server"));
+process.on("uncaughtException", error => fatal(error, "uncaughtException"));
+process.on("unhandledRejection", error => fatal(error, "unhandledRejection"));
 
-async function shutdown(signal: NodeJS.Signals) {
-  if (shuttingDown) {
-    return;
-  }
+const websocket = attachWebSocketServer(server, roomManager);
 
+export async function shutdown(signal: NodeJS.Signals) {
+  if (shuttingDown) return;
   shuttingDown = true;
+  ready = false;
+  const startedAt = performance.now();
+  logger.info({ signal }, "draining server");
 
-  console.log(
-    `\nReceived ${signal}. Shutting down...`
-  );
-
+  const deadline = setTimeout(() => fatal(new Error("Shutdown exceeded 8 seconds"), "shutdown_timeout"), 8000);
+  const httpClosed = new Promise<void>((resolve, reject) => {
+    server.close(error => error ? reject(error) : resolve());
+  });
+  const drainHttp = setTimeout(() => server.closeAllConnections(), 4500);
   try {
-    await websocket.close();
+    await Promise.all([httpClosed, websocket.close()]);
+    await Promise.all(pendingLogs);
     await matchLogger.close();
-
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve();
-        }
-      });
-
-      server.closeIdleConnections?.();
-    });
-
-    console.log("Server stopped successfully.");
+    logger.info({ elapsedMs: performance.now() - startedAt }, "server stopped");
     process.exitCode = 0;
   } catch (error) {
-    console.error("Shutdown failed:", error);
-    process.exitCode = 1;
+    fatal(error, "shutdown");
+  } finally {
+    clearTimeout(deadline);
+    clearTimeout(drainHttp);
   }
 }
 
-process.on("SIGINT", () => {
-  void shutdown("SIGINT");
-});
-
-process.on("SIGTERM", () => {
-  void shutdown("SIGTERM");
-});
+process.once("SIGINT", () => { void shutdown("SIGINT"); });
+process.once("SIGTERM", () => { void shutdown("SIGTERM"); });
 
 server.listen(config.port, config.host, () => {
-  console.log(
-    `Space Dogfight server: http://${config.host}:${config.port}`
-  );
-
-  console.log(
-    `WebSocket: ws://${config.host}:${config.port}/ws`
-  );
-
-  console.log(
-    `Match logs directory: ${config.logDir}`
-  );
+  ready = true;
+  logger.info({ host: config.host, port: config.port }, "server listening");
 });

@@ -1,3 +1,5 @@
+import { mountTouchControls } from "./touch.ts";
+import { enableProductionFeatures } from "./production.ts";
 import { measure } from "./performance.ts";
 import { z } from "zod";
 import { SeqSchema, ZERO_SEQ } from "../../shared/src/protocol/ids.ts";
@@ -65,6 +67,7 @@ const gameView = {
 
 let gameUi: HTMLDivElement | null = null;
 const input = createInput(window);
+mountTouchControls(input);
 const audioContext = new AudioContext();
 
 let world = new World();
@@ -1188,6 +1191,7 @@ const gameLoop = createLoop({
 });
 
 const online = new Online();
+enableProductionFeatures(online.panel);
 const netgraph = new Netgraph(
   online.connection,
   prediction,
@@ -1256,6 +1260,7 @@ window.addEventListener("click", unlockAudio, { capture: true });
 window.addEventListener("keydown", unlockAudio, { capture: true });
 
 online.addEventListener("joined", (event) => {
+  document.body.classList.add("in-match");
   const message = event.detail;
 
   localPlayerId = message.playerId;
@@ -1339,6 +1344,7 @@ online.connection.addEventListener(
 online.connection.addEventListener(
   "disconnected",
   (event) => {
+    document.body.classList.remove("in-match");
     gameLoop.stop();
     gameStarted = false;
     prediction.reset();

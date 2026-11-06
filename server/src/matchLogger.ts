@@ -1,3 +1,4 @@
+import { logger } from "./logger.ts";
 import { EventEmitter } from "node:events";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -48,7 +49,7 @@ export class MatchLogger extends EventEmitter<{ error: [unknown]; backpressure: 
     this.closing = false;
 
     this.on("error", (error) => {
-      console.error("Match logger error:", error);
+      logger.error({ err: error }, "match logger failed");
     });
   }
 

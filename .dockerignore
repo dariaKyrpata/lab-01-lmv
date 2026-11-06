@@ -1,0 +1,15 @@
+.git
+.github
+**/node_modules
+**/dist
+**/.env*
+**/logs
+**/coverage
+**/test-results
+**/playwright-report
+**/*.test.*
+**/*.cpuprofile
+docs
+scripts
+e2e
+src.zip

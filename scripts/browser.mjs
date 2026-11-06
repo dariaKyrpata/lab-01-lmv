@@ -7,15 +7,15 @@ import path from "node:path";
 export async function startServer(port, options = {}) {
   const logs = await mkdtemp(path.join(tmpdir(), "dogfight-lab07-"));
   const child = spawn(process.execPath, [...(options.flags ?? []), "server/src/index.ts"], {
-    env: { ...process.env, PORT: String(port), LOG_DIR: logs, ROOM_CAPACITY: String(options.capacity ?? 4) },
+    env: { ...process.env, PORT: String(port), LOG_DIR: logs, ROOM_CAPACITY: String(options.capacity ?? 4), MAX_CONNECTIONS_PER_IP: String(options.capacity ?? 16) },
     stdio: ["ignore", "ignore", "inherit"],
   });
   const base = "http://127.0.0.1:" + port;
   for (let i = 0; i < 100 && child.exitCode === null; i++) {
     const response = await fetch(base + "/health").catch(() => null);
-    if (response?.ok) return { base, close: () => new Promise(resolve => {
+    if (response?.ok) return { base, close: (signal = "SIGTERM") => new Promise(resolve => {
       if (child.exitCode !== null) resolve();
-      else { child.once("close", resolve); child.kill(); }
+      else { child.once("close", resolve); child.kill(signal); }
     }) };
     await delay(100);
   }

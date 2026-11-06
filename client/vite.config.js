@@ -5,7 +5,8 @@ export default defineConfig({// Налаштування Vite
     host: "127.0.0.1",
     port: 5173,
 
-    proxy: { // Запити до API пересилаємо на сервер
+    proxy: {
+      "/health": "http://127.0.0.1:3000", // Запити до API пересилаємо на сервер
       "/api": {
         target: "http://127.0.0.1:3000",
         changeOrigin: true

@@ -21,3 +21,11 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Verify production container
+        run: bash scripts/container-ci.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: container-smoke
+          path: |
+            container-smoke.json
+            container-load.json

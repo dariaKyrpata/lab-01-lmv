@@ -64,6 +64,7 @@ export const RoomSummarySchema = z.strictObject({
 
 export const ServerMessageSchema = z.discriminatedUnion("type", [
   SnapshotSchema,
+  z.strictObject({ version, type: z.literal("shutdown"), message: z.string() }),
   z.strictObject({
     version,
     type: z.literal("joined"),

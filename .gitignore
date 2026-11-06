@@ -27,3 +27,7 @@ coverage/
 test-results/
 playwright-report/
 *.cpuprofile
+
+.env
+.env.*
+!.env.example

@@ -1,3 +1,4 @@
+import { logger } from "./logger.ts";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 
@@ -63,7 +64,7 @@ export class Room extends EventEmitter<RoomEvents> {
     this.players = new Map();
 
     this.on("error", (error) => {
-      console.error(`Room ${this.id}:`, error);
+      logger.error({ err: error, roomId: this.id }, "room error");
     });
   }
 

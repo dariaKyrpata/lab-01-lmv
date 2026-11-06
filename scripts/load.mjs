@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import { once } from "node:events";
+import { dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { mkdir, writeFile } from "node:fs/promises";
 import { encodeInput } from "../shared/src/codec/binaryInput.ts";
@@ -7,16 +8,23 @@ import { startServer } from "./browser.mjs";
 
 const seconds = Number(process.env.LOAD_SECONDS ?? 8);
 const results = [];
+const staging = process.env.LOAD_BASE_URL;
+const report = process.env.LOAD_REPORT ?? "docs/profile/load.json";
 
 for (const clients of [8, 32, 64, 128]) {
-  const server = await startServer(3419, { capacity: 128 });
+  const server = staging ? { base: staging, close: () => {} } : await startServer(3419, { capacity: 128 });
   const sockets = [];
   let timer;
   let bytes = 0;
   try {
-    const [room] = await (await fetch(server.base + "/api/rooms")).json();
+    const response = await fetch(server.base + "/api/rooms", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Load test " + clients }),
+    });
+    if (!response.ok) throw new Error("Room creation failed: " + response.status);
+    const room = await response.json();
     await Promise.all(Array.from({ length: clients }, async (_, index) => {
-      const socket = new WebSocket(server.base.replace("http:", "ws:") + "/ws?format=binary");
+      const socket = new WebSocket(server.base.replace(/^http/, "ws") + "/ws?format=binary", { origin: new URL(server.base).origin });
       sockets.push(socket);
       socket.on("message", data => { bytes += data.length; });
       socket.on("error", () => {});
@@ -71,5 +79,5 @@ for (const clients of [8, 32, 64, 128]) {
   }
 }
 
-await mkdir("docs/profile", { recursive: true });
-await writeFile("docs/profile/load.json", JSON.stringify({ seconds, results }, null, 2) + String.fromCharCode(10));
+await mkdir(dirname(report), { recursive: true });
+await writeFile(report, JSON.stringify({ seconds, results }, null, 2) + String.fromCharCode(10));

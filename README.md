@@ -1,12 +1,67 @@
-
 # Space Dogfight
 
-A browser-based space shooter built with JavaScript,
-Canvas, Vite, and Node.js.
+Space Dogfight is a multiplayer space shooter for the browser. Pilot a ship, dodge asteroids, and fight in a shared arena. Destroy asteroids for points and earn five points for taking down another ship.
+
+[![Dogfight CI](https://github.com/9711556-ops/lab-01-lmv/actions/workflows/typecheck.yml/badge.svg?branch=lab-08-production)](https://github.com/9711556-ops/lab-01-lmv/actions/workflows/typecheck.yml)
+
+## Play locally
+
+Use the Node.js version in `.nvmrc` and run these commands from the repository root.
+
+```sh
+npm ci
+npm run build
+npm start
+```
+
+[Open the local lobby](http://127.0.0.1:3000/). Pick the same room as a friend and choose a different ship color. Use the arrow keys to steer and accelerate, Space to fire, F for a single shot, and H for homing. On a touch screen, use the steering, thrust, and fire buttons. The browser can install the game from its menu when it is served over HTTPS. Online matches require a connection.
+
+## Lab 8 — Production and deployment
+
+```mermaid
+flowchart LR
+  Browser[Browser and Canvas] <-->|HTTPS and WSS| Proxy[Render TLS proxy]
+  Proxy <--> Node[One Node.js process]
+  Node --> Rooms[Rooms and authoritative simulation]
+  Node --> Logs[JSON logs and replay events]
+  Node --> Metrics[Health, readiness, and metrics]
+```
+
+The browser sends controls. The server advances the world at 30 ticks per second and sends snapshots to everyone in the room. The client predicts its own movement and interpolates other ships. See the [network measurements](#json-and-binary-measurements) and [server capacity measurements](#server-profile-and-load) below.
+
+| Endpoint | Use |
+| --- | --- |
+| `/health` | Liveness and full Git SHA, also shown in abbreviated form in the game |
+| `/ready` | Whether the server is accepting players |
+| `/metrics` | Rooms, players, bots, traffic rates, tick p99, event loop utilization, memory, and rejected frames or upgrades |
+
+The production server uses Pino for JSON logs. Join, leave, and connection errors include room and player identifiers when available. Shutdown rejects new connections, sends a notice and close code 1001, flushes replay events, and exits. Uncaught exceptions are logged and terminate the process with code 1.
+
+### Production checks
+
+```sh
+docker compose up --build
+```
+
+To run the production smoke test against a fresh local Node process, build the client and run `node scripts/production-smoke.mjs`. It verifies origin and IP limits, oversized frames, rate limiting, join timeout, disconnect handling, malformed frames, and shutdown. The [local smoke report](docs/production/smoke-local.json) records the queueing time for 1,000 malformed frames and the healthy room's p99 before and after the flood. Windows exercises the shutdown handler through IPC. GitHub Actions runs the same checks with `docker stop`, enforces the 200 MB image limit, and runs the 8, 32, 64, and 128 client load test against a separate staging container. Browser tests cover two players, chat, restart recovery, and the mobile offline page and controls.
+
+### Release on Render
+
+The release workflow runs on `v*` tags. It builds and tests the image, then publishes the tagged image to GitHub Container Registry. Configure the hosting service once.
+
+1. In GitHub Packages, grant Render read access to the image or make the package public. The tagged image is `ghcr.io/9711556-ops/lab-01-lmv:v1.0.0`.
+2. In Render, create a Web Service from **Existing Image** and point it at that image. Keep one instance. Set the health check path to `/ready`. The app recognizes `RENDER_EXTERNAL_URL` as an allowed origin. If you add a custom domain, include its HTTPS origin in `ALLOWED_ORIGINS`.
+3. Set `TRUST_PROXY=1` for an instance reachable only through a proxy that appends the connecting IP to `X-Forwarded-For`. See [Render WebSockets](https://render.com/docs/websocket) and [deploying an image](https://render.com/docs/deploying-an-image).
+4. Store the Render deploy hook in the GitHub Actions secret `RENDER_DEPLOY_HOOK_URL` and the HTTPS address in the repository variable `RENDER_PUBLIC_URL`. Rerun the release after adding them. The workflow checks the public SHA and opens a WSS session through the proxy. See [Render deploy hooks](https://render.com/docs/deploy-hooks).
+5. Point an uptime monitor at the public `/health` endpoint. Record two players on separate networks and use their netgraph readings for the public RTT comparison.
+
+### Known limits and next steps
+
+Rooms live in one process, so a restart sends players back to the lobby and clears the match. The local load figures below come from the development machine. Hosting capacity depends on the instance's CPU and network. Replay files use local storage, which is ephemeral on a free Render instance. The demo room and bot APIs have no accounts. For a larger deployment I would add authenticated room controls, matchmaking, lag compensation, and either routing by room or a Redis backplane before adding instances.
+
+Public URL, hosted RTT, an uptime monitor, and the recorded demo depend on the live deployment. The browser test uses mobile emulation. The installation on a physical phone can be checked once the HTTPS address is available.
 
 ## Lab 7 — Engines, Memory, and Tests
-
-[![Dogfight CI](https://github.com/9711556-ops/lab-01-lmv/actions/workflows/typecheck.yml/badge.svg?branch=lab-07-engine-tests)](https://github.com/9711556-ops/lab-01-lmv/actions/workflows/typecheck.yml)
 
 ```powershell
 npm ci

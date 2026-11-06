@@ -1,5 +1,6 @@
 export function createInput(target: Window) {
   const down = new Set<string>(); //натиснуті клавіші
+  const touch = new Set<string>();
   const pressed = new Set<string>(); //клавіші, які були натиснуті один раз
 
   const gameKeys = new Set([
@@ -28,12 +29,13 @@ export function createInput(target: Window) {
 
   target.addEventListener("blur", () => { //якщо втрачається фокус, очищає натиснуті клавіші
     down.clear();
+    touch.clear();
     pressed.clear();
   });
 
   return {
     isDown(code: string) { //перевіряє, чи клавіша утримується
-      return down.has(code);
+      return down.has(code) || touch.has(code);
     },
 
     justPressed(code: string) { //перевіряє, чи клавіша була натиснута один раз
@@ -45,8 +47,15 @@ export function createInput(target: Window) {
       return true;
     },
 
+    setTouch(code: string, active: boolean) {
+      if (active && !touch.has(code)) pressed.add(code);
+      if (active) touch.add(code);
+      else touch.delete(code);
+    },
+
     reset() {
       down.clear();
+      touch.clear();
       pressed.clear();
     },
 

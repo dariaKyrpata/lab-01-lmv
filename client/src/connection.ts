@@ -28,6 +28,7 @@ export class GameConnection extends Bus<ConnectionEvents> {
   declare roomId: string | null;
   declare colorId: PlayerColorId | null;
   declare joined: boolean;
+  private shutdownNotice = "";
   declare shouldReconnect: boolean;
   declare reconnectAttempts: number;
   declare reconnectTimer: ReturnType<typeof setTimeout> | null;
@@ -101,6 +102,7 @@ export class GameConnection extends Bus<ConnectionEvents> {
     socket.binaryType = "arraybuffer";
 
     this.socket = socket;
+    this.shutdownNotice = "";
     this.joined = false;
 
     socket.addEventListener("open", () => {
@@ -163,6 +165,7 @@ export class GameConnection extends Bus<ConnectionEvents> {
       }
 
       switch (message.type) {
+        case "shutdown": this.shutdownNotice = message.message; this.emit("shutdown", message); break;
         case "roster": this.emit("roster", message); break;
         case "snapshot": this.emit("snapshot", message); break;
         case "chat": this.emit("chat", message); break;
@@ -185,7 +188,7 @@ export class GameConnection extends Bus<ConnectionEvents> {
 
       this.emit("disconnected", {
         code: event.code,
-        reason: event.reason,
+        reason: this.shutdownNotice || event.reason,
       });
 
       if (

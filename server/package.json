@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "pino": "^10.4.0",
     "ws": "^8.18.0",
     "zod": "^4.0.0"
   }
