@@ -7,6 +7,13 @@ import {
 import type { EntityId } from "../../shared/src/protocol/ids.ts";
 import type { EntitySnapshot, WorldSnapshot } from "../../shared/src/protocol/snapshots.ts";
 
+export interface RenderSample {
+  entity: EntitySnapshot;
+  x: number;
+  y: number;
+  angle: number;
+}
+
 interface Frame {
   time: number;
   receivedAt: number;
@@ -22,6 +29,8 @@ function shortestDifference(from: number, to: number, size: number) {
 }
 
 export class Interpolation {
+  private readonly views = new Map<EntityId, RenderSample>();
+  private readonly current = new Map<EntityId, RenderSample>();
   declare delay: number;
   declare snapshots: Frame[];
   declare renderTime: number | null;
@@ -32,6 +41,8 @@ export class Interpolation {
   }
 
   reset() {
+    this.views.clear();
+    this.current.clear();
     this.snapshots = [];
     this.renderTime = null;
   }
@@ -64,11 +75,13 @@ export class Interpolation {
     }
   }
 
-  sample(now = performance.now()): Map<EntityId, EntitySnapshot> {
+  sample(now = performance.now()): ReadonlyMap<EntityId, RenderSample> {
+    const result = this.current;
+    result.clear();
     const latest = this.snapshots.at(-1);
 
     if (!latest) {
-      return new Map();
+      return result;
     }
 
     const target =
@@ -91,7 +104,7 @@ export class Interpolation {
     for (const snapshot of this.snapshots) {
       after = snapshot;
 
-    if (snapshot.time > this.renderTime) {
+      if (snapshot.time > this.renderTime) {
         break;
       }
 
@@ -107,17 +120,22 @@ export class Interpolation {
         )
       : 0;
 
-    const result = new Map<EntityId, EntitySnapshot>();
 
     for (const [id, previous] of before.entities) {
-      const next = after.entities.get(id);
-
-      if (!next || previous.alive !== next.alive) {
-        result.set(id, previous);
-        continue;
+      let view = this.views.get(id);
+      if (!view) {
+        view = { entity: previous, x: previous.pos.x, y: previous.pos.y, angle: previous.angle };
+        this.views.set(id, view);
       }
+      view.entity = previous;
+      view.x = previous.pos.x;
+      view.y = previous.pos.y;
+      view.angle = previous.angle;
+      result.set(id, view);
+      const next = after.entities.get(id);
+      if (!next || previous.alive !== next.alive) continue;
 
-       const wraps = previous.kind === "ship";
+      const wraps = previous.kind === "ship";
 
 
       const dx = wraps
@@ -132,26 +150,18 @@ export class Interpolation {
         Math.hypot(dx, dy) > Math.min(latest.width, latest.height) / 4;
 
       if (teleport) {
-        result.set(id, previous);
         continue;
       }
 
       const x = previous.pos.x + dx * amount;
       const y = previous.pos.y + dy * amount;
 
-      result.set(id, {
-        ...previous,
-        pos: {
-          x: wraps ? wrap(x, latest.width) : x,
-          y: wraps ? wrap(y, latest.height) : y,
-        },
-        angle: normalizeAngle(
-          previous.angle +
-          normalizeAngle(next.angle - previous.angle) * amount
-        ),
-      });
+      view.x = wraps ? wrap(x, latest.width) : x;
+      view.y = wraps ? wrap(y, latest.height) : y;
+      view.angle = normalizeAngle(previous.angle + normalizeAngle(next.angle - previous.angle) * amount);
     }
 
+    for (const id of this.views.keys()) if (!result.has(id)) this.views.delete(id);
     return result;
   }
 }

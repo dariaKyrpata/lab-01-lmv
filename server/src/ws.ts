@@ -1,3 +1,6 @@
+import { startHeartbeat } from "./heartbeat.ts";
+import type { SnapshotPayload } from "../../shared/src/protocol/messages.ts";
+import { TokenBucket } from "./rateLimit.ts";
 import { randomUUID } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -38,6 +41,21 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
 
   const matches = new Map<string, Match>();
   let closing = false;
+  const frames = new WeakMap<SnapshotPayload["state"], Map<string, string | ArrayBuffer>>();
+
+  function encodeFrame(message: SnapshotPayload, format: GameSocket["wireFormat"]) {
+    let variants = frames.get(message.state);
+    if (!variants) {
+      variants = new Map();
+      frames.set(message.state, variants);
+    }
+    const key = format + ":" + message.sentAt + ":" + message.lastProcessedSeq;
+    const cached = variants.get(key);
+    if (cached !== undefined) return cached;
+    const encoded = format === "binary" ? serverBinaryCodec.encode(message) : serverJsonCodec.encode(message);
+    variants.set(key, encoded);
+    return encoded;
+  }
 
   function send(socket: GameSocket | undefined, message: ServerPayload, critical = false) {
     if (!socket || socket.readyState !== WebSocket.OPEN) {
@@ -52,11 +70,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
       return false;
     }
 
-    const data =
-      socket.wireFormat === "binary" &&
-      message.type === "snapshot"
-        ? serverBinaryCodec.encode(message)
-        : serverJsonCodec.encode(message);
+    const data = message.type === "snapshot" ? encodeFrame(message, socket.wireFormat) : serverJsonCodec.encode(message);
 
     const deliver = () => {
       if (socket.readyState !== WebSocket.OPEN) {
@@ -157,8 +171,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
         ? "binary"
         : "json";
 
-    let tokens = MAX_MESSAGES_PER_SECOND;
-    let lastRefill = performance.now();
+    const limiter = new TokenBucket(MAX_MESSAGES_PER_SECOND, performance.now());
 
     const joinTimer = setTimeout(() => {
       if (!socket.room) {
@@ -174,17 +187,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
     });
 
     socket.on("message", (data, isBinary) => {
-      const now = performance.now();
-      const elapsed = (now - lastRefill) / 1000;
-
-      tokens = Math.min(
-        MAX_MESSAGES_PER_SECOND,
-        tokens + elapsed * MAX_MESSAGES_PER_SECOND
-      );
-
-      lastRefill = now;
-
-      if (tokens < 1) {
+      if (!limiter.take(performance.now())) {
         socket.close(
           CLOSE_CODES.RATE_LIMIT,
           "Rate limit exceeded"
@@ -192,8 +195,6 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
 
         return;
       }
-
-      tokens -= 1;
 
       let message: ClientMessage;
 
@@ -465,27 +466,7 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
     );
   });
 
-  const heartbeat = setInterval(() => {
-    for (const socket of wss.clients) {
-      if (socket.readyState !== WebSocket.OPEN) {
-        continue;
-      }
-
-      if (socket.missedPongs >= MAX_MISSED_PONGS) {
-        socket.terminate();
-        continue;
-      }
-
-      socket.missedPongs += 1;
-
-      try {
-        socket.ping();
-      } catch (error: unknown) {
-        console.error("Ping failed:", error);
-        socket.terminate();
-      }
-    }
-  }, HEARTBEAT_INTERVAL);
+  const heartbeat = startHeartbeat(wss.clients, HEARTBEAT_INTERVAL, MAX_MISSED_PONGS);
 
   async function close() {
     closing = true;
@@ -525,6 +506,11 @@ export function attachWebSocketServer(server: Server, roomManager: RoomManager) 
   return {
     wss,
     close,
+    setBots(room: Room, count: number) {
+      const match = getOrCreateMatch(room);
+      match.setBots(count);
+      if (count > 0 || room.players.size > 0) match.start();
+    },
     getStats() {
       return [...matches.values()].map(
         (match) => match.getStats()

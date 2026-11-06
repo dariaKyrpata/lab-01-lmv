@@ -1,5 +1,5 @@
 
-import test from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";

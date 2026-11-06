@@ -1,3 +1,4 @@
+import { botInput } from "./bot.ts";
 import { randomInt } from "node:crypto";
 
 import { World } from "../../shared/src/sim/world.ts";
@@ -19,6 +20,9 @@ export class Match {
   declare readonly inputs: Map<string, Input[]>;
   declare readonly lastReceivedSeq: Map<string, Seq>;
   declare readonly lastProcessedSeq: Map<string, Seq>;
+  private readonly bots = new Set<string>();
+  private readonly tickSamples = new Float64Array(1800);
+  private tickSampleCount = 0;
   declare running: boolean;
   declare timer: ReturnType<typeof setTimeout> | null;
   declare nextTick: number;
@@ -103,7 +107,25 @@ export class Match {
     return true;
   }
 
+  setBots(count: number) {
+    while (this.bots.size > count) {
+      const id = [...this.bots].at(-1);
+      if (id === undefined) break;
+      this.bots.delete(id);
+      this.removePlayer(id);
+    }
+    while (this.bots.size < count) {
+      const id = "bot-" + this.bots.size;
+      this.addPlayer(id);
+      this.bots.add(id);
+    }
+  }
+
   step() {
+    for (const id of this.bots) {
+      const input = botInput(this.world, id);
+      if (input) this.enqueue(id, input);
+    }
     const commands = new Map<string, Input>();
 
     for (const [playerId, queue] of this.inputs) {
@@ -180,6 +202,8 @@ export class Match {
       this.timing.tickDurationMs =
         finishedAt - startedAt;
 
+      this.tickSamples[this.tickSampleCount % this.tickSamples.length] = this.timing.tickDurationMs;
+      this.tickSampleCount++;
       this.nextTick += interval;
 
       if (finishedAt - this.nextTick > interval * 5) {
@@ -209,8 +233,12 @@ export class Match {
       pendingInputs += queue.length;
     }
 
+    const samples = this.tickSamples.slice(0, Math.min(this.tickSampleCount, this.tickSamples.length)).sort();
     return {
       room: this.room.id,
+      bots: this.bots.size,
+      tickP99Ms: samples[Math.ceil(samples.length * 0.99) - 1] ?? 0,
+      tickMaxMs: samples.at(-1) ?? 0,
       tick: this.world.tick,
       tickRate: TICK_RATE,
       players: this.world.players.size,

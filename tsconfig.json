@@ -4,6 +4,8 @@
     "shared/src/**/*.ts",
     "server/src/**/*.ts",
     "client/src/**/*.ts",
-    "shared/test/**/*.ts"
+    "shared/test/**/*.ts",
+    "client/test/**/*.ts",
+    "server/test/**/*.ts"
   ]
 }

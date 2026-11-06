@@ -466,10 +466,10 @@ export class Lobby extends Bus<LobbyEvents> {
 
     this.renderColors();
     this.updateControls();
-    this.refresh();
+    void this.refresh();
 
     this.interval = setInterval(
-      () => this.refresh(),
+      () => { void this.refresh(); },
       1500
     );
   }
@@ -508,7 +508,7 @@ export class Lobby extends Bus<LobbyEvents> {
     if (!this.element.isConnected) {
       this.show();
     } else {
-      this.refresh();
+      void this.refresh();
     }
 
     this.renderColors();

@@ -1,4 +1,4 @@
-import { Vector2 } from "./vector.ts";
+import { MutableVector2, Vector2 } from "./vector.ts";
 
 import type { Vec2 } from "./vector.ts";
 import type { EntityId } from "../protocol/ids.ts";
@@ -16,8 +16,16 @@ export interface EntityOptions {
 
 export class Entity<K extends EntityKind> {
   declare id: EntityId;
-  declare pos: Vector2;
-  declare vel: Vector2;
+  private readonly position = new MutableVector2();
+  private readonly velocity = new MutableVector2();
+
+  get pos(): Vector2 { return this.position; }
+  set pos(value: Vec2) { this.setPosition(value.x, value.y); }
+  get vel(): Vector2 { return this.velocity; }
+  set vel(value: Vec2) { this.setVelocity(value.x, value.y); }
+
+  setPosition(x: number, y: number) { this.position.set(x, y); }
+  setVelocity(x: number, y: number) { this.velocity.set(x, y); }
   declare angle: number;
   declare radius: number;
   declare readonly kind: K;
@@ -33,8 +41,8 @@ export class Entity<K extends EntityKind> {
     alive = true,
   }: EntityOptions & { kind: K }) {
     this.id = id;
-    this.pos = new Vector2(pos.x, pos.y);
-    this.vel = new Vector2(vel.x, vel.y);
+    this.setPosition(pos.x, pos.y);
+    this.setVelocity(vel.x, vel.y);
     this.angle = angle;
     this.radius = radius;
     this.kind = kind;
@@ -46,7 +54,7 @@ export class Entity<K extends EntityKind> {
       return;
     }
 
-    this.pos = this.pos.add(this.vel.scale(dt));
+    this.setPosition(this.pos.x + this.vel.x * dt, this.pos.y + this.vel.y * dt);
   }
 
   destroy() {

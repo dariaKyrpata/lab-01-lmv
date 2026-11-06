@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   getShipColor,
+  DEFAULT_SHIP_COLOR,
   getAvailableColors,
 } from "../../shared/src/colors.ts";
 
@@ -112,13 +113,13 @@ export class Room extends EventEmitter<RoomEvents> {
     }
 
     const colorId =
-      player.colorId ?? this.availableColors[0]?.id;
+      player.colorId ?? this.availableColors[0]?.id ?? (this.maxPlayers > 4 ? DEFAULT_SHIP_COLOR.id : undefined);
 
     if (!colorId || !getShipColor(colorId)) {
       throw Object.assign(new Error("Invalid ship color"), { code: "INVALID_COLOR" });
     }
 
-    if (this.takenColors.includes(colorId)) {
+    if (this.takenColors.includes(colorId) && (this.maxPlayers <= 4 || player.colorId !== undefined)) {
       throw Object.assign(new Error("Color is already taken"), { code: "COLOR_TAKEN" });
     }
 

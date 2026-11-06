@@ -1,4 +1,3 @@
-import { Vector2 } from "./vector.ts";
 import { normalizeAngle } from "../movement.ts";
 
 import type { HomingSnapshot, EntityKind } from "../protocol/snapshots.ts";
@@ -46,9 +45,8 @@ export class Homing {
     const targetAngle = Math.atan2(dy, dx);
 
     if (currentSpeed === 0) {
-      entity.vel = Vector2.fromAngle(targetAngle).scale(
-        this.speed ?? 100
-      );
+      const speed = this.speed ?? 100;
+      entity.setVelocity(Math.cos(targetAngle) * speed, Math.sin(targetAngle) * speed);
 
       entity.angle = targetAngle;
       return;
@@ -72,9 +70,8 @@ export class Homing {
 
     const angle = normalizeAngle(currentAngle + turn);
 
-    entity.vel = Vector2.fromAngle(angle).scale(
-      this.speed ?? currentSpeed
-    );
+    const speed = this.speed ?? currentSpeed;
+    entity.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
 
     entity.angle = angle;
   }

@@ -14,11 +14,22 @@
     "build": "npm run build --workspace=client",
     "start": "npm run start --workspace=server",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node --test shared/test/*.test.ts"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "profile:browser": "node scripts/profile.mjs",
+    "profile:load": "node scripts/load.mjs",
+    "lint": "eslint ."
   },
   "devDependencies": {
-    "typescript": "~5.9.3",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^24.0.0",
-    "@types/ws": "^8.18.0"
+    "@types/ws": "^8.18.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "fast-check": "^4.10.2",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^4.1.12",
+    "eslint": "^9.39.5"
   }
 }

@@ -30,11 +30,31 @@ export function wrap(value: number, size: number) {
   return ((value % size) + size) % size;
 }
 
+export interface MutableMovement {
+  pos: { x: number; y: number };
+  vel: { x: number; y: number };
+  angle: number;
+  thrust: boolean;
+}
+
 export function integrate(
   state: MovementState,
   input: MovementInput,
   width: number,
   height: number,
+  dt = FIXED_DT
+) {
+  const next = { ...state, pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, thrust: input.thrust };
+  integrateInto(state, input, width, height, next, dt);
+  return next;
+}
+
+export function integrateInto(
+  state: MovementState,
+  input: MovementInput,
+  width: number,
+  height: number,
+  out: MutableMovement,
   dt = FIXED_DT
 ) {
   const angle = normalizeAngle(
@@ -61,17 +81,10 @@ export function integrate(
     vy *= MAX_SPEED / speed;
   }
 
-  return {
-    ...state,
-    angle,
-    thrust: input.thrust,
-    pos: {
-      x: wrap(state.pos.x + vx * dt, width),
-      y: wrap(state.pos.y + vy * dt, height),
-    },
-    vel: {
-      x: vx,
-      y: vy,
-    },
-  };
+  out.pos.x = wrap(state.pos.x + vx * dt, width);
+  out.pos.y = wrap(state.pos.y + vy * dt, height);
+  out.vel.x = vx;
+  out.vel.y = vy;
+  out.angle = angle;
+  out.thrust = input.thrust;
 }

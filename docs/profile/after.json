@@ -1,0 +1,54 @@
+{
+  "browser": "158.0.8127.18",
+  "seconds": 30,
+  "bots": 8,
+  "samples": 1801,
+  "frameIntervalMs": {
+    "p50": 16.7,
+    "p95": 16.7,
+    "p99": 16.8
+  },
+  "renderMs": {
+    "p50": 1.1,
+    "p95": 1.5,
+    "p99": 1.8
+  },
+  "simulateMs": {
+    "p50": 0.1,
+    "p95": 0.3,
+    "p99": 0.4
+  },
+  "gcCount": 37,
+  "majorGC": 21,
+  "gcTotalMs": 101.902,
+  "gcMaxMs": 6.942,
+  "topAllocatorsBytes": [
+    {
+      "name": "readValue",
+      "value": 59987988
+    },
+    {
+      "name": "(anonymous)",
+      "value": 46686148
+    },
+    {
+      "name": "runChecks",
+      "value": 15144408
+    }
+  ],
+  "topSelfMs": [
+    {
+      "name": "measure",
+      "value": 2106.68
+    },
+    {
+      "name": "fillText",
+      "value": 117.04
+    },
+    {
+      "name": "dispatchEvent",
+      "value": 97.22
+    }
+  ],
+  "tickP99Ms": 2.0064000000020314
+}

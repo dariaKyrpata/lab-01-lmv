@@ -1,13 +1,15 @@
+import { ObjectPool } from "../../shared/src/sim/pool.ts";
 import { FIXED_DT } from "../../shared/src/movement.ts";
 import { Ship } from "../../shared/src/sim/ship.ts";
 
 import type { World, SimEntity } from "../../shared/src/sim/world.ts";
-import type { Bullet } from "../../shared/src/sim/bullet.ts";
+import { Bullet } from "../../shared/src/sim/bullet.ts";
 import type { EntityId, Seq } from "../../shared/src/protocol/ids.ts";
 import type { InputPayload } from "../../shared/src/protocol/messages.ts";
 import type { Prediction } from "./prediction.ts";
 
 export class PredictedShots {
+  private readonly bulletPool = new ObjectPool(() => new Bullet(), 32);
   declare bullets: Map<Seq, Bullet>;
   declare cooldown: number | null;
 
@@ -16,6 +18,7 @@ export class PredictedShots {
   }
 
   reset() {
+    for (const bullet of this.bullets?.values() ?? []) this.bulletPool.release(bullet);
     this.bullets = new Map();
     this.cooldown = null;
   }
@@ -26,6 +29,7 @@ export class PredictedShots {
 
       if (!bullet.alive) {
         this.bullets.delete(seq);
+        this.bulletPool.release(bullet);
       }
     }
   }
@@ -68,6 +72,7 @@ export class PredictedShots {
       },
 
       createBullet: world.createBullet,
+      bulletPool: this.bulletPool,
     };
 
     const bullet = previewShip.fire(
@@ -90,13 +95,14 @@ export class PredictedShots {
   reconcile(world: World, playerId: string | null, lastProcessedSeq: Seq, pendingInputs: readonly InputPayload[]) {
     const ship = world.getPlayer(playerId);
 
-    for (const seq of this.bullets.keys()) {
+    for (const [seq, bullet] of this.bullets) {
       if (seq <= lastProcessedSeq) {
         this.bullets.delete(seq);
       }
     }
 
     if (!ship?.alive) {
+      for (const bullet of this.bullets.values()) this.bulletPool.release(bullet);
       this.bullets.clear();
       this.cooldown = 0;
       return;

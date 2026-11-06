@@ -4,6 +4,83 @@
 A browser-based space shooter built with JavaScript,
 Canvas, Vite, and Node.js.
 
+## Lab 7 — Engines, Memory, and Tests
+
+[![Dogfight CI](https://github.com/9711556-ops/lab-01-lmv/actions/workflows/typecheck.yml/badge.svg?branch=lab-07-engine-tests)](https://github.com/9711556-ops/lab-01-lmv/actions/workflows/typecheck.yml)
+
+```powershell
+npm ci
+npm run typecheck
+npm run lint
+npm run test:coverage
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+Vitest runs tests in all three workspaces. The suite covers vector math, fixed-step movement, collisions, deterministic world updates, reconciliation, the accumulator, rate limiting, and heartbeat expiry. Seven fast-check properties cover both codecs, frame lengths, malformed frames, in-arena movement, and message validation. Coverage thresholds apply to shared source lines and statements. Playwright uses two isolated Chromium contexts, one on JSON and one on Binary. It verifies the shared roster, observes movement in the second canvas within 500 ms, and delivers a chat message.
+
+### Demo with eight bots
+
+Run the server and client as in Lab 5, then join Pink Galaxy. In PowerShell, set the bot count for that room.
+
+```powershell
+$room = Invoke-RestMethod http://127.0.0.1:3000/api/rooms |
+  Where-Object name -eq 'Pink Galaxy' |
+  Select-Object -First 1
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:3000/api/rooms/$($room.id)/bots" `
+  -ContentType 'application/json' -Body '{"count":8}'
+```
+
+The bot steers toward a nearby ship, evades at close range, and shoots when aligned. The server validates and queues its input with the same code used for a human. Send `{"count":0}` to remove the bots. Default rooms still have four human slots. The load script starts a separate local server with a larger room.
+
+### Browser profile
+
+Each run used Chromium Headless Shell 158.0.8127.18 on Windows with a Ryzen 5 7535HS. The scene had eight bots and one browser pilot holding thrust and fire, with a 1,000 × 700 viewport and a 30-second recording after warmup. The CPU flame charts show the first two seconds of the sampled stacks. The `?profile=1` option exposes timings for simulation, rendering, decoding, and reconciliation.
+
+| Browser metric | Before | After |
+|---|---:|---:|
+| Frame interval p50 / p95 / p99, ms | 16.7 / 16.7 / 16.8 | 16.7 / 16.7 / 16.8 |
+| Render work p50 / p95 / p99, ms | 1.2 / 1.6 / 1.9 | 1.1 / 1.5 / 1.8 |
+| Simulate work p50 / p95 / p99, ms | 0.1 / 0.3 / 0.4 | 0.1 / 0.3 / 0.4 |
+| GC events / major events | 40 / 21 | 37 / 21 |
+| Total / longest GC pause, ms | 111.0 / 8.7 | 101.9 / 6.9 |
+
+| Profile view | Before | After |
+|---|---|---|
+| Largest allocation samples | `readValue` 63.2 MB, anonymous 47.8 MB, `entries` 34.4 MB | `readValue` 60.0 MB, anonymous 46.7 MB, `runChecks` 15.1 MB |
+| Largest named self-time samples | `measure` 2,074 ms, `fillText` 166 ms, `drawImage` 147 ms | `measure` 2,107 ms, `fillText` 117 ms, `dispatchEvent` 97 ms |
+
+![Before optimization CPU flame chart](docs/profile/before-flame.png)
+![After optimization CPU flame chart](docs/profile/after-flame.png)
+
+Decoding allocated the most memory. Caching the fixed schema's field lists took repeated `Object.entries` out of that path. The simulation now reuses bullets and explosion particles through bounded pools, writes positions and velocities into existing vectors, and keeps detached snapshots for network messages. Interpolation reuses its render samples across frames. A comparison against Lab 6 produced identical snapshots for 1,000 ticks with the same seed and four players.
+
+The longest observed browser GC pause fell by 1.8 ms. The strict frame-interval target of under 16.7 ms and the zero-major-GC target were not met. Render work stayed below 2 ms at p99, but frame intervals followed the approximately 60 Hz headless display cadence. Snapshot decoding and validation still allocate, and these recordings include allocation sampling. Raw results are available in [before.json](docs/profile/before.json) and [after.json](docs/profile/after.json).
+
+### Server profile and load
+
+A 60-second Node 24.21 CPU profile of a seeded match with eight bots and scripted shooting measured tick p99 of **1.285 ms before** and **1.250 ms after**. The profiler showed bot steering, serialization, and validation, with collision checks outside the top self-time functions. Sharing encoded snapshots between clients with the same protocol and acknowledgment removed redundant serialization. The collision algorithm stayed unchanged. The isolated server run saw 0 major collections before and 1 after, so the browser's smaller pause did not carry over to every scenario.
+
+The load script opens real WebSocket connections without browser windows. It sends movement and shooting inputs at 30 Hz, warms up each fresh server, and measures eight seconds per level. Throughput is aggregate snapshot/control payload received by all clients on loopback.
+
+| Clients | Tick p99 before, ms | Tick p99 after, ms | Max tick after, ms | Event-loop use after | RSS after, MiB | Download after, MB/s |
+|---:|---:|---:|---:|---:|---:|---:|
+| 8 | 8.55 | 5.45 | 9.60 | 6.5% | 92.7 | 1.50 |
+| 32 | 93.41 | 8.53 | 11.52 | 16.4% | 97.3 | 19.95 |
+| 64 | 213.27 | 13.28 | 14.00 | 27.9% | 99.3 | 70.70 |
+| 128 | 416.46 | 24.57 | 27.69 | 58.8% | 119.1 | 255.75 |
+
+![Tick p99 by client count before and after](docs/profile/load.svg)
+
+The initial run first exceeded the 33 ms budget at 32 clients. After caching, all tested levels through 128 clients stayed under 33 ms, including the maximum observed tick. This establishes capacity of **at least 128 clients on the tested loopback workload**. The saturation point beyond that range and capacity over an external network remain unmeasured.
+
+### Web Worker experiment
+
+The benchmark transferred 240 binary snapshots of 5,936 bytes each to a browser worker and received the decoded state back. Inline decoding took 70.8 ms total. Worker round trips took 149.0 ms, including transfer, scheduling, decoding, and return cloning. Posting the buffers took 2.7 ms on the main thread. The worker reduced synchronous decoding work on that thread, but increased the time to receive a usable state. It remains available only under `?worker-experiment`; the normal match keeps inline decoding.
+
+For local measurements use `npm run build --workspace=client -- --minify=false` and `npm run profile:browser -- after`. The server CPU profile is available with `node scripts/profile-server.mjs after`, the headless load test with `npm run profile:load`, and the worker benchmark with `node scripts/worker.mjs`.
+
 ## Lab 6 — TypeScript
 
 The shared simulation, codecs, WebSocket server, and browser game run from TypeScript source. Use Node.js 22.18 or newer for native type stripping on the server. Vite handles the browser build. Earlier standalone exercises and server integration test drivers remain in JavaScript.
@@ -76,7 +153,7 @@ The benchmark ran in Node.js on 300 snapshots from a four-player simulation. Ban
 Run the simulation and codec tests:
 
 ```powershell
-node --test shared/test/simulation.test.ts shared/test/codec.test.ts
+npm test -- --project shared
 ```
 
 ## Lab 4 — Node.js, WebSocket and Streams
@@ -321,7 +398,8 @@ without loading the entire recording into memory.
 Run all server tests:
 
 ```bash
-node --test server/src/*.test.js
+npm test -- --project server
+node --test server/src/api.test.js server/src/ws.test.js
 ```
 
 The HTTP API and WebSocket integration tests

@@ -1,9 +1,10 @@
+import { ObjectPool } from "./pool.ts";
 import { Vector2 } from "./vector.ts";
 import { Ship } from "./ship.ts";
 import { Bullet } from "./bullet.ts";
 import { Asteroid } from "./asteroid.ts";
 import { Pickup } from "./pickup.ts";
-import { Explosion } from "./explosion.ts";
+import { Explosion, createParticlePool } from "./explosion.ts";
 import { Homing } from "./homing.ts";
 import { findCollisions } from "./collision.ts";
 import { nextRandom } from "../random.ts";
@@ -53,6 +54,8 @@ function restoreEntity(data: EntitySnapshot): SimEntity {
 }
 
 export class World {
+  readonly bulletPool = new ObjectPool(() => new Bullet(), 512);
+  private readonly particlePool = createParticlePool();
   declare seed: number;
   declare rngState: number;
   declare width: number;
@@ -245,11 +248,12 @@ export class World {
     for (const entity of this) {
       if (entity.kind === "bullet" && entity.ownerId === shipId) {
         this.entities.delete(entity.id);
+        this.bulletPool.release(entity);
       }
     }
   }
 
-  createBullet({
+  createBullet(this: Pick<World, "get" | "spawn" | "bulletPool" | typeof Symbol.iterator>, {
     pos,
     vel,
     ownerId = null,
@@ -292,16 +296,16 @@ export class World {
       }
     }
 
-    return this.spawn(
-      new Bullet({
+    const bullet = this.bulletPool.acquire();
+    bullet.reset({
         pos,
         vel,
         angle: Math.atan2(vel.y, vel.x),
         ownerId,
         inputSeq,
         homing: behavior,
-      })
-    );
+    });
+    return this.spawn(bullet);
   }
 
     createAsteroid() {
@@ -349,6 +353,7 @@ export class World {
       pos,
       color,
       random: () => this.random(),
+      pool: this.particlePool,
     });
 
     this.emitEvent({ type: "exploded",
@@ -503,7 +508,7 @@ export class World {
       }
     }
 
-    for (const entity of [...this]) {
+    for (const entity of this) {
       if (entity.alive && entity.kind !== "ship") {
         entity.update(FIXED_DT, this);
       }
@@ -536,6 +541,8 @@ export class World {
     for (const entity of this) {
       if (!entity.alive && entity.kind !== "ship") {
         this.entities.delete(entity.id);
+        if (entity.kind === "bullet") this.bulletPool.release(entity);
+        if (entity.kind === "explosion") entity.recycleParticles();
       }
     }
   }

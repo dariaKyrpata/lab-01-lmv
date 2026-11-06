@@ -56,3 +56,13 @@ export class Vector2 implements Vec2 {
     return new Vector2(Math.cos(angle), Math.sin(angle));
   }
 }
+
+export class MutableVector2 extends Vector2 {
+  declare x: number;
+  declare y: number;
+
+  set(x: number, y: number): void {
+    this.x = x;
+    this.y = y;
+  }
+}

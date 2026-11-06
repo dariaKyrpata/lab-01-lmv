@@ -1,16 +1,25 @@
 import { Entity } from "./entity.ts";
-import { Vector2 } from "./vector.ts";
+import { MutableVector2 } from "./vector.ts";
 
 import { UNSPAWNED_ID } from "../protocol/ids.ts";
 import type { ExplosionSnapshot } from "../protocol/snapshots.ts";
 import type { Vec2 } from "./vector.ts";
-interface Particle { pos: Vector2; vel: Vector2; radius: number; life: number }
+import { ObjectPool } from "./pool.ts";
+
+interface Particle { pos: MutableVector2; vel: MutableVector2; radius: number; life: number }
+
+export function createParticlePool() {
+  return new ObjectPool<Particle>(() => ({
+    pos: new MutableVector2(), vel: new MutableVector2(), radius: 0, life: 0,
+  }), 2048);
+}
 
 export class Explosion extends Entity<"explosion"> {
   declare color: string;
   declare duration: number;
   declare ttl: number;
   declare particles: Particle[];
+  private particlePool?: ObjectPool<Particle>;
 
   constructor({
     id = UNSPAWNED_ID,
@@ -37,11 +46,11 @@ export class Explosion extends Entity<"explosion"> {
     this.ttl = ttl;
 
     this.particles = particles.map((particle) => ({
-      pos: new Vector2(
+      pos: new MutableVector2(
         particle.pos.x,
         particle.pos.y
       ),
-      vel: new Vector2(
+      vel: new MutableVector2(
         particle.vel.x,
         particle.vel.y
       ),
@@ -56,32 +65,30 @@ export class Explosion extends Entity<"explosion"> {
     color = "#ff9f43",
     particleCount = 20,
     duration = 0.8,
-  }: { pos: Vec2; random: () => number; color?: string; particleCount?: number; duration?: number }) {
+    pool = createParticlePool(),
+  }: { pos: Vec2; random: () => number; color?: string; particleCount?: number; duration?: number; pool?: ObjectPool<Particle> }) {
     if (typeof random !== "function") {
       throw new TypeError("A seeded random function is required");
     }
 
-    const particles = [];
+    const particles: Particle[] = [];
 
     for (let i = 0; i < particleCount; i++) {
       const angle = random() * Math.PI * 2;
       const speed = 40 + random() * 180;
 
-      particles.push({
-        pos: new Vector2(),
-        vel: Vector2.fromAngle(angle).scale(speed),
-        radius: 1 + random() * 3,
-        life: 1,
-      });
+      const particle = pool.acquire();
+      particle.pos.set(0, 0);
+      particle.vel.set(Math.cos(angle) * speed, Math.sin(angle) * speed);
+      particle.radius = 1 + random() * 3;
+      particle.life = 1;
+      particles.push(particle);
     }
 
-    return new Explosion({
-      pos,
-      color,
-      duration,
-      ttl: duration,
-      particles,
-    });
+    const explosion = new Explosion({ pos, color, duration, ttl: duration });
+    explosion.particles = particles;
+    explosion.particlePool = pool;
+    return explosion;
   }
 
   update(dt: number) {
@@ -91,14 +98,10 @@ export class Explosion extends Entity<"explosion"> {
 
     this.ttl -= dt;
 
+    const drag = Math.pow(0.96, dt * 60);
     for (const particle of this.particles) {
-      particle.pos = particle.pos.add(
-        particle.vel.scale(dt)
-      );
-
-      particle.vel = particle.vel.scale(
-        Math.pow(0.96, dt * 60)
-      );
+      particle.pos.set(particle.pos.x + particle.vel.x * dt, particle.pos.y + particle.vel.y * dt);
+      particle.vel.set(particle.vel.x * drag, particle.vel.y * drag);
 
       particle.life = Math.max(
         0,
@@ -109,6 +112,13 @@ export class Explosion extends Entity<"explosion"> {
     if (this.ttl <= 0) {
       this.destroy();
     }
+  }
+
+  recycleParticles() {
+    if (!this.particlePool) return;
+    for (const particle of this.particles) this.particlePool.release(particle);
+    this.particles.length = 0;
+    this.particlePool = undefined;
   }
 
   toSnapshot(): ExplosionSnapshot {

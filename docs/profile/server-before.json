@@ -1,0 +1,32 @@
+{
+  "seconds": 60,
+  "bots": 8,
+  "tickP99Ms": 1.2845000000015716,
+  "tickMaxMs": 3.295799999999872,
+  "gcCount": 66,
+  "majorGC": 0,
+  "gcTotalMs": 27.855299472808838,
+  "gcMaxMs": 1.820500135421753,
+  "topSelfMs": [
+    [
+      "post",
+      77.792
+    ],
+    [
+      "botInput",
+      37.187000000000005
+    ],
+    [
+      "(anonymous)",
+      35.464
+    ],
+    [
+      "listOnTimeout",
+      26.315
+    ],
+    [
+      "writeValue",
+      21.913000000000004
+    ]
+  ]
+}

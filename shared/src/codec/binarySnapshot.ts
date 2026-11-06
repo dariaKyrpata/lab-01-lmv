@@ -9,6 +9,16 @@ type Scalar = "uint8" | "uint16" | "uint32" | "int16" | "float32" | "float64" | 
 type Schema = Scalar | RecordSchema | { optional: Schema } | { array: Schema } | { tuple: readonly Schema[] };
 interface RecordSchema { [key: string]: Schema }
 
+const schemaEntries = new WeakMap<object, [string, Schema][]>();
+function entries(schema: Exclude<Schema, string>) {
+  let cached = schemaEntries.get(schema);
+  if (!cached) {
+    cached = Object.entries(schema);
+    schemaEntries.set(schema, cached);
+  }
+  return cached;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -120,6 +130,8 @@ const UNIONS: Record<"entity" | "event", { field: string; schemas: Record<string
   },
 };
 
+const unionNames = { entity: Object.keys(ENTITY_SCHEMAS), event: Object.keys(EVENT_SCHEMAS) };
+
 const SNAPSHOT_SCHEMA: RecordSchema = {
   tick: "uint32",
   sentAt: "float64",
@@ -171,7 +183,7 @@ function writeValue(writer: BinaryWriter, schema: Schema, value: unknown) {
 
     if (schema === "entity" || schema === "event") {
       const union = UNIONS[schema];
-      const names = Object.keys(union.schemas);
+      const names = unionNames[schema];
       if (!isRecord(value)) throw new TypeError("Expected an object");
       const name = value[union.field];
       if (typeof name !== "string") throw new TypeError("Expected a discriminator");
@@ -237,7 +249,7 @@ function writeValue(writer: BinaryWriter, schema: Schema, value: unknown) {
 
   if (!isRecord(value)) throw new TypeError("Expected an object");
 
-  for (const [key, type] of Object.entries(schema)) {
+  for (const [key, type] of entries(schema)) {
     writeValue(writer, type, value[key]);
   }
 }
@@ -250,7 +262,7 @@ function readValue(reader: BinaryReader, schema: Schema): unknown {
 
     if (schema === "entity" || schema === "event") {
       const union = UNIONS[schema];
-      const names = Object.keys(union.schemas);
+      const names = unionNames[schema];
       const name = names[reader.uint8()];
 
       if (name === undefined) {
@@ -290,7 +302,7 @@ function readValue(reader: BinaryReader, schema: Schema): unknown {
 
   const result: Record<string, unknown> = {};
 
-  for (const [key, type] of Object.entries(schema)) {
+  for (const [key, type] of entries(schema)) {
     result[key] = readValue(reader, type);
   }
 

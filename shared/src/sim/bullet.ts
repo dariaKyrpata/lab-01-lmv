@@ -7,6 +7,8 @@ import type { World } from "./world.ts";
 import type { EntityId, Seq } from "../protocol/ids.ts";
 import { ZERO_SEQ } from "../protocol/ids.ts";
 
+type BulletOptions = Partial<Omit<BulletSnapshot, "homing">> & { homing?: Homing | HomingSnapshot | null };
+
 export class Bullet extends Entity<"bullet"> {
   declare ownerId: EntityId | null;
   declare damage: number;
@@ -14,7 +16,12 @@ export class Bullet extends Entity<"bullet"> {
   declare inputSeq: Seq;
   declare homing: Homing | null;
 
-  constructor({
+  constructor(options: BulletOptions = {}) {
+    super({ kind: "bullet" });
+    this.reset(options);
+  }
+
+  reset({
     id = UNSPAWNED_ID,
     pos,
     vel,
@@ -26,17 +33,13 @@ export class Bullet extends Entity<"bullet"> {
     ttl = 2,
     homing = null,
     inputSeq = ZERO_SEQ,
-  }: Partial<Omit<BulletSnapshot, "homing">> & { homing?: Homing | HomingSnapshot | null } = {}) {
-    super({
-      id,
-      pos,
-      vel,
-      angle,
-      radius,
-      alive,
-      kind: "bullet",
-    });
-
+  }: BulletOptions) {
+    this.id = id;
+    this.setPosition(pos?.x ?? 0, pos?.y ?? 0);
+    this.setVelocity(vel?.x ?? 0, vel?.y ?? 0);
+    this.angle = angle;
+    this.radius = radius;
+    this.alive = alive;
     this.ownerId = ownerId;
     this.damage = damage;
     this.ttl = ttl;

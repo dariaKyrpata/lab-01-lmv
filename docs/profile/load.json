@@ -1,0 +1,37 @@
+{
+  "seconds": 8,
+  "results": [
+    {
+      "clients": 8,
+      "tickP99Ms": 5.447,
+      "tickMaxMs": 9.598,
+      "eluPercent": 6.5,
+      "rssMiB": 92.7,
+      "downBytesPerSecond": 1504998
+    },
+    {
+      "clients": 32,
+      "tickP99Ms": 8.528,
+      "tickMaxMs": 11.522,
+      "eluPercent": 16.4,
+      "rssMiB": 97.3,
+      "downBytesPerSecond": 19953440
+    },
+    {
+      "clients": 64,
+      "tickP99Ms": 13.279,
+      "tickMaxMs": 14,
+      "eluPercent": 27.9,
+      "rssMiB": 99.3,
+      "downBytesPerSecond": 70698501
+    },
+    {
+      "clients": 128,
+      "tickP99Ms": 24.572,
+      "tickMaxMs": 27.686,
+      "eluPercent": 58.8,
+      "rssMiB": 119.1,
+      "downBytesPerSecond": 255750203
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import http from "node:http";
 import path from "node:path";
 import { createReadStream } from "node:fs";
@@ -37,7 +38,7 @@ const CLIENT_DIST = path.resolve(
 
 const MAX_BODY_BYTES = 4096;
 
-const roomManager = new RoomManager();
+const roomManager = new RoomManager({ maxPlayers: config.roomCapacity });
 const matchLogger = new MatchLogger(config.logDir);
 const replayManager = new ReplayManager(config.logDir);
 
@@ -367,6 +368,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
 
     sendJson(res, 200, {
       matches: websocket.getStats(),
+      memory: process.memoryUsage(),
+      eventLoop: performance.eventLoopUtilization(),
     });
 
     return;
@@ -394,6 +397,27 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, pathname: st
     pathname.startsWith("/api/replays/")
   ) {
     await handleReplayApi(req, res, pathname);
+    return;
+  }
+
+  const botRoute = /^\/api\/rooms\/([a-zA-Z0-9_-]+)\/bots$/.exec(pathname);
+  if (botRoute?.[1]) {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    const room = roomManager.get(botRoute[1]);
+    if (!room) {
+      sendJson(res, 404, { error: "Room not found" });
+      return;
+    }
+    const parsed = z.strictObject({ count: z.number().int().min(0).max(8) }).safeParse(await readJsonBody(req));
+    if (!parsed.success) {
+      sendJson(res, 400, { error: "Bot count must be an integer from 0 to 8" });
+      return;
+    }
+    websocket.setBots(room, parsed.data.count);
+    sendJson(res, 200, { count: parsed.data.count });
     return;
   }
 

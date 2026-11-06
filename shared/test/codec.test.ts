@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "vitest";
 import { encodeInput, decodeInput } from "../src/codec/binaryInput.ts";
 import { encodeSnapshot, decodeSnapshot } from "../src/codec/binarySnapshot.ts";
 import { normalizeAngle } from "../src/movement.ts";

@@ -1,3 +1,4 @@
+import { measure } from "./performance.ts";
 import { byteLength } from "../../shared/src/codec/json.ts";
 import { clientBinaryCodec, clientJsonCodec } from "../../shared/src/codec/codec.ts";
 import {
@@ -128,10 +129,10 @@ export class GameConnection extends Bus<ConnectionEvents> {
       try {
         if (typeof data === "string") {
           this.metrics.received += byteLength(data);
-          message = clientJsonCodec.decode(data);
+          message = measure("dogfight:decode", () => clientJsonCodec.decode(data));
         } else if (data instanceof ArrayBuffer) {
           this.metrics.received += data.byteLength;
-          message = clientBinaryCodec.decode(data);
+          message = measure("dogfight:decode", () => clientBinaryCodec.decode(data));
         } else {
           throw new TypeError("Unsupported message format");
         }

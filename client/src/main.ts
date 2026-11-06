@@ -1,3 +1,4 @@
+import { measure } from "./performance.ts";
 import { z } from "zod";
 import { SeqSchema, ZERO_SEQ } from "../../shared/src/protocol/ids.ts";
 import type { EntityId, Seq } from "../../shared/src/protocol/ids.ts";
@@ -20,6 +21,7 @@ import { createInput } from "./input.ts";
 import { World } from "../../shared/src/sim/world.ts";
 import { FIXED_DT } from "../../shared/src/movement.ts";
 import { Prediction } from "./prediction.ts";
+import type { RenderSample } from "./interpolation.ts";
 import { Interpolation } from "./interpolation.ts";
 import { PredictedShots } from "./predictedShots.ts";
 
@@ -79,7 +81,7 @@ let scoreboardPlayers: ServerMessageOf<"roster">["players"] = [];
 const prediction = new Prediction();
 const interpolation = new Interpolation(100);
 const predictedShots = new PredictedShots();
-let interpolatedEntities = new Map<EntityId, EntitySnapshot>();
+let interpolatedEntities: ReadonlyMap<EntityId, RenderSample> = new Map();
 
 function getTheme() {
   return (
@@ -569,13 +571,19 @@ function getEntityView(entity: RenderEntity) {
   return entity;
 }
 
-function drawEntity(entity: RenderEntity) {
-  const view = getEntityView(entity);
-  const position = view.pos;
-  const angle = view.angle;
+const observeRendering = new URLSearchParams(location.search).has("observe");
+
+function drawEntity(entity: RenderEntity, sample?: RenderSample) {
+  const view = sample ? entity : getEntityView(entity);
+  const x = sample?.x ?? view.pos.x;
+  const y = sample?.y ?? view.pos.y;
+  const angle = sample?.angle ?? view.angle;
+  if (observeRendering && entity.kind === "ship") {
+    canvas.dispatchEvent(new CustomEvent("dogfight:draw-ship", { detail: { x, y, color: entity.colorId } }));
+  }
   ctx.save();
 
-  ctx.translate(position.x, position.y);
+  ctx.translate(x, y);
   ctx.rotate(angle);
 
   switch (entity.kind) {
@@ -1119,9 +1127,10 @@ function render() {
     return entity.kind === "bullet" && entity.ownerId === ownShipId;
   }
 
-  for (const entity of interpolatedEntities.values()) {
+  for (const sample of interpolatedEntities.values()) {
+    const entity = sample.entity;
     if (entity.alive && !isLocalEntity(entity)) {
-      drawEntity(entity);
+      drawEntity(entity, sample);
     }
   }
 
@@ -1139,7 +1148,8 @@ function render() {
 
   ctx.restore();
 
-  for (const ship of interpolatedEntities.values()) {
+  for (const sample of interpolatedEntities.values()) {
+    const ship = sample.entity;
     if (ship.kind !== "ship" || !ship.alive || isLocalEntity(ship)) {
       continue;
     }
@@ -1150,8 +1160,8 @@ function render() {
       colorId: ship.colorId,
       hp: ship.hp,
       pos: {
-        x: worldX + ship.pos.x * worldScale,
-        y: worldY + ship.pos.y * worldScale,
+        x: worldX + sample.x * worldScale,
+        y: worldY + sample.y * worldScale,
       },
       radius: ship.radius * worldScale,
     };
@@ -1173,8 +1183,8 @@ function render() {
 
 const gameLoop = createLoop({
   step: FIXED_DT,
-  simulate,
-  render,
+  simulate: () => measure("dogfight:simulate", simulate),
+  render: () => measure("dogfight:render", render),
 });
 
 const online = new Online();
@@ -1238,7 +1248,7 @@ gameEvents.addEventListener("exploded", () => {
 });
 
 function unlockAudio() {
-  gameAudio?.unlock();
+  void gameAudio?.unlock().catch(error => console.warn("Audio unlock failed", error));
 }
 
 window.addEventListener("pointerdown", unlockAudio);
@@ -1308,12 +1318,7 @@ online.connection.addEventListener(
     world = World.fromSnapshot(message.state);
     world.localPlayerId = localPlayerId;
 
-    prediction.reconcile(
-      world.player,
-      message.lastProcessedSeq,
-      world.width,
-      world.height
-    );
+    measure("dogfight:reconcile", () => prediction.reconcile(world.player, message.lastProcessedSeq, world.width, world.height));
 
     predictedShots.reconcile(
       world,
@@ -1415,4 +1420,10 @@ async function startGame() {
   }
 }
 
-startGame();
+void startGame().catch(error => console.error("Game startup failed", error));
+if (new URLSearchParams(location.search).has("worker-experiment")) {
+  void import("./workerExperiment.ts")
+    .then(module => module.compareWorker())
+    .then(result => { document.documentElement.dataset.workerResult = JSON.stringify(result); })
+    .catch(error => { document.documentElement.dataset.workerResult = JSON.stringify({ error: String(error) }); });
+}

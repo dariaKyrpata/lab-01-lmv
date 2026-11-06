@@ -1,6 +1,6 @@
 import { Entity } from "./entity.ts";
 import { Vector2 } from "./vector.ts";
-import { integrate } from "../movement.ts";
+import { integrateInto } from "../movement.ts";
 import { NEUTRAL_INPUT } from "../protocol/messages.ts";
 
 export const MAX_HP = 100;
@@ -24,6 +24,7 @@ export class Ship extends Entity<"ship"> {
   declare homingEnabled: boolean;
 
   #hp: number;
+  private readonly movement = { pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, angle: 0, thrust: false };
 
   constructor({
     id = UNSPAWNED_ID,
@@ -74,16 +75,18 @@ export class Ship extends Entity<"ship"> {
       return;
     }
 
-    const next = integrate(
+    const next = this.movement;
+    integrateInto(
       this,
       input,
       world.width,
       world.height,
+      next,
       dt
     );
 
-    this.pos = new Vector2(next.pos.x, next.pos.y);
-    this.vel = new Vector2(next.vel.x, next.vel.y);
+    this.setPosition(next.pos.x, next.pos.y);
+    this.setVelocity(next.vel.x, next.vel.y);
     this.angle = next.angle;
     this.thrust = next.thrust;
 
