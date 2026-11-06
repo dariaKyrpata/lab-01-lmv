@@ -7,19 +7,19 @@ import {
   getAvailableColors,
 } from "../../shared/src/colors.ts";
 
-import type { ColorId } from "../../shared/src/colors.ts";
+import type { PlayerColorId } from "../../shared/src/colors.ts";
 import type { RoomSummary } from "../../shared/src/protocol/messages.ts";
 import type { GameSocket } from "./ws.ts";
 
 export interface JoiningPlayer {
   id: string;
   name: string;
-  colorId?: ColorId;
+  colorId?: PlayerColorId;
   socket?: GameSocket;
 }
 
 export interface Player extends JoiningPlayer {
-  colorId: ColorId;
+  colorId: PlayerColorId;
 }
 
 type MembershipEvent = {
@@ -27,7 +27,7 @@ type MembershipEvent = {
   type: "join" | "leave";
   playerId: string;
   name: string;
-  colorId: ColorId;
+  colorId: PlayerColorId;
 };
 
 type ChatEvent = {

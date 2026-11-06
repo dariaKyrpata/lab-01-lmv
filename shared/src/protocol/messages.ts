@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { EntityIdSchema, SeqSchema, TickSchema } from "./ids.ts";
-import { ColorIdSchema, WorldSnapshotSchema } from "./snapshots.ts";
+import { PlayerColorIdSchema, WorldSnapshotSchema } from "./snapshots.ts";
 import type { ReadonlyData } from "./snapshots.ts";
 
 export const PROTOCOL_VERSION = 1;
@@ -37,7 +37,7 @@ export const InputSchema = z.strictObject({
 
 export const ClientMessageSchema = z.discriminatedUnion("type", [
   InputSchema,
-  z.strictObject({ version, type: z.literal("join"), room, name, colorId: ColorIdSchema.optional() }),
+  z.strictObject({ version, type: z.literal("join"), room, name, colorId: PlayerColorIdSchema.optional() }),
   z.strictObject({ version, type: z.literal("chat"), text }),
   z.strictObject({ version, type: z.literal("leave") }),
   z.strictObject({ version, type: z.literal("net_ping"), clientTime: milliseconds }),
@@ -53,13 +53,13 @@ export const SnapshotSchema = z.strictObject({
   state: WorldSnapshotSchema,
 }).refine(message => message.tick === message.state.tick, "Snapshot tick mismatch");
 
-const rosterPlayer = z.strictObject({ id: z.string(), name, colorId: ColorIdSchema });
+const rosterPlayer = z.strictObject({ id: z.string(), name, colorId: PlayerColorIdSchema });
 export const RoomSummarySchema = z.strictObject({
   id: z.string(),
   name: z.string(),
   players: z.number().int().nonnegative(),
   maxPlayers: z.number().int().positive(),
-  takenColors: z.array(ColorIdSchema),
+  takenColors: z.array(PlayerColorIdSchema),
 });
 
 export const ServerMessageSchema = z.discriminatedUnion("type", [
@@ -69,7 +69,7 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("joined"),
     playerId: z.string(),
     shipId: EntityIdSchema,
-    colorId: ColorIdSchema,
+    colorId: PlayerColorIdSchema,
     room,
     seed: z.number().int().min(0).max(0xffffffff),
     width: z.number().positive(),
@@ -82,7 +82,7 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     code: z.string(),
     message: z.string(),
     room: room.optional(),
-    takenColors: z.array(ColorIdSchema).optional(),
+    takenColors: z.array(PlayerColorIdSchema).optional(),
   }),
   z.strictObject({ version, type: z.literal("roster"), room, players: z.array(rosterPlayer) }),
   z.strictObject({ version, type: z.literal("chat"), playerId: z.string(), name, text, t: milliseconds }),

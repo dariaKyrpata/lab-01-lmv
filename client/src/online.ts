@@ -1,5 +1,5 @@
 import { requireElement } from "./dom.ts";
-import type { ColorId } from "../../shared/src/colors.ts";
+import type { PlayerColorId } from "../../shared/src/colors.ts";
 import { Bus } from "./bus.ts";
 import type { ConnectionEvents } from "./connection.ts";
 
@@ -137,7 +137,7 @@ export class Online extends Bus<OnlineEvents> {
     this.setupEvents();
   }
 
-  applyColor(colorId: ColorId) {
+  applyColor(colorId: PlayerColorId) {
     const color =
       getShipColor(colorId) ??
       getShipColor("pink");
@@ -313,7 +313,7 @@ export class Online extends Bus<OnlineEvents> {
     }
   }
 
-  connect(name: string, roomId: string, colorId: ColorId = "pink") {
+  connect(name: string, roomId: string, colorId: PlayerColorId = "pink") {
     this.applyColor(colorId);
 
     this.panel.style.display = "none";

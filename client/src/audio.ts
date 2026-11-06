@@ -1,29 +1,21 @@
-export function createAudio(audioContext: AudioContext, sounds: Readonly<Record<string, AudioBuffer>>) {// Створення системи звукових ефектів
-  let unlocked = false;
-
-  async function unlock() {// Активація звуку після взаємодії з грою
-    if (audioContext.state === "suspended") {
-      await audioContext.resume();
-    }
-
-    unlocked = audioContext.state === "running";
-  }
-
-  function play(name: string) { // Відтворення звуку за назвою
+export function createAudio(audioContext: AudioContext, sounds: Readonly<Record<string, AudioBuffer>>) {
+  function play(name: string) {
     const buffer = sounds[name];
-    if (!unlocked || !buffer) return;
+    if (audioContext.state !== "running" || !buffer) return false;
 
-    const source = audioContext.createBufferSource();// Створення джерела звуку
+    const source = audioContext.createBufferSource();
     source.buffer = buffer;
-
-    const gain = audioContext.createGain(); // Налаштування гучності
+    const gain = audioContext.createGain();
     gain.gain.value = name === "shoot" ? 0.25 : 0.45;
-
-    source.connect(gain); // Підключення звуку до виходу
+    source.connect(gain);
     gain.connect(audioContext.destination);
-
-    source.start(); // Відтворення звуку
+    source.addEventListener("ended", () => {
+      source.disconnect();
+      gain.disconnect();
+    }, { once: true });
+    source.start();
+    return true;
   }
 
-  return { unlock, play };
+  return { play };
 }

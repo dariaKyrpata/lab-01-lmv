@@ -1,9 +1,11 @@
+import { BOT_SHIP_COLORS, SHIP_COLORS } from "../colors.ts";
 import { z } from "zod";
 import { EntityIdSchema, SeqSchema, TickSchema, UInt32Schema } from "./ids.ts";
 
 const number = z.number().finite();
 const vector = z.strictObject({ x: number, y: number });
-export const ColorIdSchema = z.enum(["pink", "blue", "green", "orange"]);
+export const PlayerColorIdSchema = z.enum(SHIP_COLORS.map(color => color.id));
+export const ColorIdSchema = z.enum([...SHIP_COLORS, ...BOT_SHIP_COLORS].map(color => color.id));
 
 const entity = {
   id: EntityIdSchema,

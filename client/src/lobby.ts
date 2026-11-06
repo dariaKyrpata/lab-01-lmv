@@ -1,12 +1,12 @@
 import { requireElement } from "./dom.ts";
-import type { ColorId } from "../../shared/src/colors.ts";
+import type { PlayerColorId } from "../../shared/src/colors.ts";
 import { Bus } from "./bus.ts";
 import { z } from "zod";
 import { RoomSummarySchema } from "../../shared/src/protocol/messages.ts";
 import type { RoomSummary, ServerMessageOf } from "../../shared/src/protocol/messages.ts";
 
 interface LobbyEvents {
-  join: { name: string; roomId: string; colorId: ColorId };
+  join: { name: string; roomId: string; colorId: PlayerColorId };
 }
 
 const RoomsSchema = z.array(RoomSummarySchema);
@@ -20,14 +20,14 @@ import {
 
 export class Lobby extends Bus<LobbyEvents> {
   declare rooms: RoomSummary[];
-  declare selectedColorId: ColorId | null;
+  declare selectedColorId: PlayerColorId | null;
   declare busy: boolean;
   declare notice: string;
   declare controller: AbortController | null;
   declare interval: ReturnType<typeof setInterval> | null;
   declare roomsSignature: string;
   declare readonly element: HTMLDivElement;
-  declare readonly colorButtons: Map<ColorId, { button: HTMLButtonElement; availability: HTMLElement }>;
+  declare readonly colorButtons: Map<PlayerColorId, { button: HTMLButtonElement; availability: HTMLElement }>;
   declare readonly nameInput: HTMLInputElement;
   declare readonly roomSelect: HTMLSelectElement;
   declare readonly joinButton: HTMLButtonElement;

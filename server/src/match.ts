@@ -1,3 +1,4 @@
+import { BOT_SHIP_COLORS } from "../../shared/src/colors.ts";
 import { botInput } from "./bot.ts";
 import { randomInt } from "node:crypto";
 
@@ -108,6 +109,9 @@ export class Match {
   }
 
   setBots(count: number) {
+    if (!Number.isInteger(count) || count < 0 || count > BOT_SHIP_COLORS.length) {
+      throw new RangeError("Invalid bot count");
+    }
     while (this.bots.size > count) {
       const id = [...this.bots].at(-1);
       if (id === undefined) break;
@@ -116,7 +120,9 @@ export class Match {
     }
     while (this.bots.size < count) {
       const id = "bot-" + this.bots.size;
-      this.addPlayer(id);
+      const color = BOT_SHIP_COLORS[this.bots.size];
+      if (!color) throw new Error("Missing bot color");
+      this.addPlayer(id).colorId = color.id;
       this.bots.add(id);
     }
   }

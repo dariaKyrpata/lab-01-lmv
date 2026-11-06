@@ -6,7 +6,7 @@ import {
 } from "../../shared/src/colors.ts";
 
 import { Bus } from "./bus.ts";
-import type { ColorId } from "../../shared/src/colors.ts";
+import type { PlayerColorId } from "../../shared/src/colors.ts";
 import type { ClientPayload, ServerMessage, ServerMessageOf } from "../../shared/src/protocol/messages.ts";
 
 export type ConnectionEvents = {
@@ -26,7 +26,7 @@ export class GameConnection extends Bus<ConnectionEvents> {
   declare queue: ClientPayload[];
   declare playerName: string | null;
   declare roomId: string | null;
-  declare colorId: ColorId | null;
+  declare colorId: PlayerColorId | null;
   declare joined: boolean;
   declare shouldReconnect: boolean;
   declare reconnectAttempts: number;
@@ -60,7 +60,7 @@ export class GameConnection extends Bus<ConnectionEvents> {
     };
   }
 
-  connect(name: string, roomId: string, colorId: ColorId = "pink") {
+  connect(name: string, roomId: string, colorId: PlayerColorId = "pink") {
     if (!name || !roomId) {
       throw new Error(
         "Player name and room are required"

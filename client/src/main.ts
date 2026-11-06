@@ -1247,12 +1247,13 @@ gameEvents.addEventListener("exploded", () => {
   gameAudio?.play("explosion");
 });
 
-function unlockAudio() {
-  void gameAudio?.unlock().catch(error => console.warn("Audio unlock failed", error));
+function unlockAudio(event: Event) {
+  if (!event.isTrusted || audioContext.state === "running" || audioContext.state === "closed") return;
+  void audioContext.resume().catch(error => console.warn("Audio unlock failed", error));
 }
 
-window.addEventListener("pointerdown", unlockAudio);
-window.addEventListener("keydown", unlockAudio);
+window.addEventListener("click", unlockAudio, { capture: true });
+window.addEventListener("keydown", unlockAudio, { capture: true });
 
 online.addEventListener("joined", (event) => {
   const message = event.detail;
